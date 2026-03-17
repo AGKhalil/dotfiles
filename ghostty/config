@@ -1,0 +1,7 @@
+macos-option-as-alt = true
+
+keybind = ctrl+h=goto_split:left
+keybind = ctrl+l=goto_split:right
+keybind = ctrl+k=goto_split:up
+keybind = ctrl+j=goto_split:down
+keybind = shift+enter=csi:13;2u
