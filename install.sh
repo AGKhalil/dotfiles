@@ -22,7 +22,7 @@ link_it() {
   ok "$dst → $src"
 }
 
-# ── Neovim (AppImage, no sudo required) ─────────────────────────────────────
+# ── Neovim (prebuilt tarball, no sudo/FUSE required) ────────────────────────
 
 install_nvim() {
   local bin_dir="$HOME/.local/bin"
@@ -33,16 +33,41 @@ install_nvim() {
     return
   fi
 
-  info "Installing Neovim AppImage..."
+  info "Installing Neovim..."
   local arch
   arch="$(uname -m)"
-  local url="https://github.com/neovim/neovim/releases/latest/download/nvim.appimage"
-  if [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; then
-    url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-arm64.appimage"
+  local os
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+  # Use prebuilt tarball — works without FUSE, more reliable than AppImage
+  local url=""
+  if [ "$os" = "linux" ] && [ "$arch" = "x86_64" ]; then
+    url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-x86_64.tar.gz"
+  elif [ "$os" = "linux" ] && { [ "$arch" = "aarch64" ] || [ "$arch" = "arm64" ]; }; then
+    url="https://github.com/neovim/neovim/releases/latest/download/nvim-linux-arm64.tar.gz"
+  elif [ "$os" = "darwin" ] && { [ "$arch" = "arm64" ] || [ "$arch" = "x86_64" ]; }; then
+    url="https://github.com/neovim/neovim/releases/latest/download/nvim-macos-${arch}.tar.gz"
+  else
+    warn "Unsupported platform: $os/$arch — skipping nvim install"
+    return
   fi
 
-  curl -fsSL "$url" -o "$bin_dir/nvim"
-  chmod +x "$bin_dir/nvim"
+  local tmp
+  tmp="$(mktemp -d)"
+  curl -fsSL "$url" -o "$tmp/nvim.tar.gz"
+  tar xzf "$tmp/nvim.tar.gz" -C "$tmp"
+
+  # Move extracted nvim to ~/.local (merges bin/, lib/, share/)
+  local extracted
+  extracted="$(ls -d "$tmp"/nvim-*/ 2>/dev/null | head -1)"
+  if [ -z "$extracted" ]; then
+    warn "Failed to extract nvim — skipping"
+    rm -rf "$tmp"
+    return
+  fi
+
+  cp -r "$extracted"/* "$HOME/.local/"
+  rm -rf "$tmp"
   ok "nvim installed to $bin_dir/nvim"
 }
 
