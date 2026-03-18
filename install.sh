@@ -94,13 +94,14 @@ prompt_opencode_profile() {
     return
   fi
 
-  echo
-  info "OpenCode profile setup"
-  echo "  1) personal  — single personal profile"
-  echo "  2) work      — single work profile"
-  echo "  3) both      — personal (default) + work"
-  echo
-  printf "  Choose [1/2/3]: "
+  # All interactive output goes to stderr so command substitution doesn't eat it
+  echo >&2
+  info "OpenCode profile setup" >&2
+  echo "  1) personal  — single personal profile" >&2
+  echo "  2) work      — single work profile" >&2
+  echo "  3) both      — personal (default) + work" >&2
+  echo >&2
+  printf "  Choose [1/2/3]: " >&2
   read -r choice
 
   case "$choice" in
@@ -108,7 +109,7 @@ prompt_opencode_profile() {
     2) echo "work" ;;
     3) echo "both" ;;
     *)
-      warn "Invalid choice '$choice' — defaulting to 'personal'"
+      warn "Invalid choice '$choice' — defaulting to 'personal'" >&2
       echo "personal"
       ;;
   esac
