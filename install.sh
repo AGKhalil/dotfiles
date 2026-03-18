@@ -107,13 +107,38 @@ ensure_path() {
   fi
 }
 
+# ── Shell config (prompt, aliases, etc.) ─────────────────────────────────────
+
+setup_shell() {
+  local shell_rc
+  if [ -n "${ZSH_VERSION:-}" ] || [ -f "$HOME/.zshrc" ]; then
+    shell_rc="$HOME/.zshrc"
+  else
+    shell_rc="$HOME/.bashrc"
+  fi
+
+  local source_line="[ -f \"$DOTFILES_DIR/bash/bashrc\" ] && source \"$DOTFILES_DIR/bash/bashrc\""
+  if ! grep -qF "dotfiles/bash/bashrc" "$shell_rc" 2>/dev/null; then
+    echo "$source_line" >> "$shell_rc"
+    ok "Added dotfiles bashrc source to $shell_rc"
+  else
+    ok "dotfiles bashrc already sourced in $shell_rc"
+  fi
+}
+
 # ── Symlinks ─────────────────────────────────────────────────────────────────
 
 setup_symlinks() {
   info "Linking configs..."
-  link_it "$DOTFILES_DIR/nvim"         "$HOME/.config/nvim"
-  link_it "$DOTFILES_DIR/ghostty"      "$HOME/.config/ghostty"
+  link_it "$DOTFILES_DIR/nvim"            "$HOME/.config/nvim"
   link_it "$DOTFILES_DIR/opencode/skills" "$HOME/.opencode/skills"
+
+  # Ghostty config only matters on machines running Ghostty (not headless servers)
+  if [ -n "${DISPLAY:-}" ] || [ "$(uname -s)" = "Darwin" ]; then
+    link_it "$DOTFILES_DIR/ghostty" "$HOME/.config/ghostty"
+  else
+    info "Headless server detected — skipping ghostty symlink"
+  fi
 }
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -125,6 +150,7 @@ main() {
   ensure_path
   install_nvim
   install_opencode
+  setup_shell
   setup_symlinks
 
   echo

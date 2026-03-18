@@ -1,0 +1,13 @@
+# ── dotfiles shell config (sourced on all machines) ──────────────────────────
+
+# --- History ---
+export HISTCONTROL=ignoredups:erasedups
+
+# --- Path ---
+export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
+
+# --- Prompt: [branch] dir $ ---
+__git_branch() {
+  git branch 2>/dev/null | sed -n 's/^\* //p'
+}
+export PS1='\[\033[35m\]$(__git_branch)\[\033[m\] \[\033[33m\]\W\[\033[m\] $ '
