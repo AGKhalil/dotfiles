@@ -85,6 +85,34 @@ install_opencode_binary() {
   ok "opencode binary installed"
 }
 
+# ── Worktrunk ────────────────────────────────────────────────────────────────
+
+install_worktrunk() {
+  if command -v wt &>/dev/null; then
+    ok "worktrunk already installed: $(wt --version 2>&1 | head -1)"
+    return
+  fi
+
+  info "Installing worktrunk..."
+  local os
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+  if [ "$os" = "darwin" ] && command -v brew &>/dev/null; then
+    brew install worktrunk
+  else
+    # Linux / macOS without brew: prebuilt static binary via shell installer
+    curl --proto '=https' --tlsv1.2 -LsSf \
+      https://github.com/max-sixty/worktrunk/releases/latest/download/worktrunk-installer.sh | sh
+  fi
+
+  ok "worktrunk installed"
+}
+
+setup_worktrunk_symlinks() {
+  info "Linking worktrunk config..."
+  link_it "$DOTFILES_DIR/worktrunk/config.toml" "$HOME/.config/worktrunk/config.toml"
+}
+
 # ── OpenCode profile setup ───────────────────────────────────────────────────
 
 prompt_opencode_profile() {
@@ -170,6 +198,7 @@ setup_opencode_symlinks() {
   link_it "$DOTFILES_DIR/opencode/agents"         "$HOME/.config/opencode/agents"
   link_it "$DOTFILES_DIR/opencode/commands"        "$HOME/.config/opencode/commands"
   link_it "$DOTFILES_DIR/opencode/opencode.json"  "$HOME/.config/opencode/opencode.json"
+  link_it "$DOTFILES_DIR/opencode/rules"          "$HOME/.config/opencode/rules"
 }
 
 # ── PATH setup ───────────────────────────────────────────────────────────────
@@ -240,6 +269,7 @@ uninstall() {
   echo "    - OpenCode plugin cache     (~/.cache/opencode/)"
   echo "    - OpenCode wrapper scripts  (~/.local/bin/opencode, opencode-work)"
   echo "    - OpenCode data dirs        (~/.local/share/opencode-*)"
+  echo "    - Worktrunk config          (~/.config/worktrunk/)"
   echo "    - Neovim config symlink     (~/.config/nvim)"
   echo "    - Ghostty config symlink    (~/.config/ghostty)"
   echo
@@ -302,6 +332,12 @@ uninstall() {
     ok "Removed legacy ~/.config/opencode-spaces/"
   fi
 
+  # Worktrunk config
+  if [ -L "$HOME/.config/worktrunk/config.toml" ]; then
+    rm "$HOME/.config/worktrunk/config.toml"
+    ok "Removed worktrunk config symlink"
+  fi
+
   # Neovim config symlink (keep the binary)
   if [ -L "$HOME/.config/nvim" ]; then
     rm "$HOME/.config/nvim"
@@ -350,6 +386,7 @@ main() {
   ensure_path
   install_nvim
   install_opencode_binary
+  install_worktrunk
   setup_shell
   setup_symlinks
 
@@ -359,9 +396,11 @@ main() {
   info "Setting up OpenCode with profile: $profile"
   setup_opencode_profiles "$profile"
   setup_opencode_symlinks
+  setup_worktrunk_symlinks
 
   echo
   ok "All done! Restart your shell or run: source ~/.bashrc"
+  info "Run 'wt config shell install' once to enable shell integration (cd on switch)."
 }
 
 main "$@"
