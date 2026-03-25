@@ -26,17 +26,20 @@ vim.opt.sidescrolloff = 8
 vim.opt.cursorline = true
 vim.opt.wrap = true
 
--- Clipboard: use OSC 52 for remote SSH, system clipboard locally
+-- Clipboard: OSC 52 over SSH so yank/paste crosses to local machine.
+-- For paste: Cmd+V in terminal uses bracketed paste (handled natively).
+-- "p" in normal mode uses OSC 52 paste (terminal must allow clipboard-read).
 if os.getenv("SSH_TTY") then
+  local osc52 = require('vim.ui.clipboard.osc52')
   vim.g.clipboard = {
     name = 'OSC 52',
     copy = {
-      ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
-      ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+      ['+'] = osc52.copy('+'),
+      ['*'] = osc52.copy('*'),
     },
     paste = {
-      ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
-      ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+      ['+'] = osc52.paste('+'),
+      ['*'] = osc52.paste('*'),
     },
   }
 end
