@@ -27,8 +27,7 @@ vim.opt.cursorline = true
 vim.opt.wrap = true
 
 -- Clipboard: OSC 52 for copy over SSH (yank on server → local clipboard).
--- Paste is left empty so Neovim reads from the terminal's bracketed paste
--- (Cmd+V). This avoids the unreliable OSC 52 paste query.
+-- Paste: Cmd+V in insert mode uses terminal bracketed paste.
 if os.getenv("SSH_TTY") then
   local osc52 = require('vim.ui.clipboard.osc52')
   vim.g.clipboard = {
@@ -44,6 +43,30 @@ if os.getenv("SSH_TTY") then
   }
 end
 vim.opt.clipboard = "unnamedplus"
+
+-- Fix paste over SSH through tmux: tmux re-encodes pasted newlines as CSI u
+-- sequences (^[[27;5;106~) when nvim has CSI u mode enabled. Override the
+-- paste handler to decode these back to newlines.
+local orig_paste = vim.paste
+vim.paste = function(lines, phase)
+  local cleaned = {}
+  for i, line in ipairs(lines) do
+    -- Replace CSI u encoded Ctrl+J (newline) sequences that tmux inserts
+    cleaned[i] = line:gsub('\027%[27;5;106~', '\n')
+  end
+  -- Re-split on the decoded newlines
+  local result = {}
+  for _, line in ipairs(cleaned) do
+    for part in (line .. '\n'):gmatch('(.-)\n') do
+      table.insert(result, part)
+    end
+  end
+  -- Remove trailing empty string from the split
+  if #result > 0 and result[#result] == '' then
+    table.remove(result)
+  end
+  return orig_paste(result, phase)
+end
 
 -- Splits
 vim.opt.splitbelow = true
