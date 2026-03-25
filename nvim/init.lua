@@ -26,7 +26,20 @@ vim.opt.sidescrolloff = 8
 vim.opt.cursorline = true
 vim.opt.wrap = true
 
--- Clipboard (use system clipboard)
+-- Clipboard: use OSC 52 for remote SSH, system clipboard locally
+if os.getenv("SSH_TTY") then
+  vim.g.clipboard = {
+    name = 'OSC 52',
+    copy = {
+      ['+'] = require('vim.ui.clipboard.osc52').copy('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').copy('*'),
+    },
+    paste = {
+      ['+'] = require('vim.ui.clipboard.osc52').paste('+'),
+      ['*'] = require('vim.ui.clipboard.osc52').paste('*'),
+    },
+  }
+end
 vim.opt.clipboard = "unnamedplus"
 
 -- Splits
