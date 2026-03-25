@@ -26,9 +26,9 @@ vim.opt.sidescrolloff = 8
 vim.opt.cursorline = true
 vim.opt.wrap = true
 
--- Clipboard: OSC 52 over SSH so yank/paste crosses to local machine.
--- For paste: Cmd+V in terminal uses bracketed paste (handled natively).
--- "p" in normal mode uses OSC 52 paste (terminal must allow clipboard-read).
+-- Clipboard: OSC 52 for copy over SSH (yank on server → local clipboard).
+-- Paste is left empty so Neovim reads from the terminal's bracketed paste
+-- (Cmd+V). This avoids the unreliable OSC 52 paste query.
 if os.getenv("SSH_TTY") then
   local osc52 = require('vim.ui.clipboard.osc52')
   vim.g.clipboard = {
@@ -38,8 +38,8 @@ if os.getenv("SSH_TTY") then
       ['*'] = osc52.copy('*'),
     },
     paste = {
-      ['+'] = osc52.paste('+'),
-      ['*'] = osc52.paste('*'),
+      ['+'] = function() return nil end,
+      ['*'] = function() return nil end,
     },
   }
 end
