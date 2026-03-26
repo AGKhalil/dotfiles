@@ -141,6 +141,10 @@ export const AgentNotifyPlugin: Plugin = async ({
 
   async function classifyIdle(sessionId: string): Promise<void> {
     try {
+      // Skip subagent sessions — only notify for main sessions
+      const sessionInfo = await client.session.get({ path: { id: sessionId } });
+      if (sessionInfo?.data?.parentID) return;
+
       const msgs = await client.session.messages({ path: { id: sessionId } });
       if (!msgs?.data?.length) {
         writeEvent(sessionId, "done", { summary: "Session idle" });
