@@ -74,13 +74,17 @@ export const AgentNotifyPlugin: Plugin = async ({
 
   const port = await discoverPort(client);
 
-  const projectName = typeof project === "string"
-    ? project
-    : project?.name ?? directory?.split("/").pop() ?? "unknown";
+  const basename = (p: string) => p.split("/").pop() ?? p;
 
-  const worktreeName = typeof worktree === "string"
+  const projectRaw = typeof project === "string"
+    ? project
+    : project?.name ?? directory ?? "unknown";
+  const projectName = basename(projectRaw);
+
+  const worktreeRaw = typeof worktree === "string"
     ? worktree
-    : (worktree as any)?.name ?? directory?.split("/").pop() ?? "unknown";
+    : (worktree as any)?.name ?? directory ?? "unknown";
+  const worktreeName = basename(worktreeRaw);
 
   // ── Heartbeat ───────────────────────────────────────────────────────────
   const heartbeatInterval = setInterval(() => {
