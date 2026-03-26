@@ -26,7 +26,7 @@ async function showNotification(
 ): Promise<void> {
   try {
     const esc = (s: string) =>
-      s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+      (s ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
     let script = `display notification "${esc(body)}" with title "${esc(title)}"`;
     if (subtitle) {
       script += ` subtitle "${esc(subtitle)}"`;
@@ -105,10 +105,13 @@ async function subscribe(): Promise<void> {
           try {
             const raw = line.slice(5).trim();
             const ntfyEvent = JSON.parse(raw);
-            // ntfy wraps the user payload in a `message` field
-            const message = ntfyEvent.message ?? raw;
+            // Skip ntfy control events (open, keepalive)
+            if (!ntfyEvent.message) continue;
+            const message = ntfyEvent.message;
             const eventPayload: NtfyEventPayload =
               typeof message === "string" ? JSON.parse(message) : message;
+            // Skip if missing required fields
+            if (!eventPayload.event_id || !eventPayload.type) continue;
             await handleEvent(eventPayload);
           } catch {
             // Skip non-JSON lines (keepalive, etc.)

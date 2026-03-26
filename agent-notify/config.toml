@@ -4,7 +4,7 @@
 
 # Machine role: "main" (Mac with listener) or "server" (daemon only)
 # Set by the install script on first run.
-role = "main"
+# role = "main"
 
 # Label shown in Telegram messages to identify this machine
 # server_label = "my-server"
