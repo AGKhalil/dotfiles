@@ -275,12 +275,21 @@ create_wrapper() {
   local wrapper="$HOME/.local/bin/$name"
 
   mkdir -p "$HOME/.local/bin"
-  cat > "$wrapper" <<EOF
+  cat > "$wrapper" <<'OUTER'
 #!/bin/bash
+OUTER
+  cat >> "$wrapper" <<EOF
 # $name — OpenCode $profile profile
 export XDG_DATA_HOME="\${HOME}/.local/share/opencode-$profile"
-exec ~/.opencode/bin/opencode "\$@"
 EOF
+  cat >> "$wrapper" <<'OUTER'
+# Fix Anthropic OAuth plugin to use fixed port 45543 (for SSH port forwarding)
+_auth_js="$HOME/.cache/opencode/node_modules/@ex-machina/opencode-anthropic-auth/dist/auth.js"
+if [ -f "$_auth_js" ] && grep -q 'server\.listen(0,' "$_auth_js" 2>/dev/null; then
+  sed -i.bak 's/server\.listen(0,/server.listen(45543,/' "$_auth_js" && rm -f "$_auth_js.bak"
+fi
+exec ~/.opencode/bin/opencode "$@"
+OUTER
   chmod +x "$wrapper"
   ok "Created wrapper: $wrapper (profile: $profile)"
 }
