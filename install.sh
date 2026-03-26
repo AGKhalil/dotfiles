@@ -545,18 +545,22 @@ setup_agent_notify() {
   mkdir -p "$AN_LOG_DIR"
   mkdir -p "$HOME/.local/share/agent-notify"
 
-  # Plugin symlink
-  agent_notify_plugin_symlink
-
-  # Telegram setup (interactive, first-time only)
-  agent_notify_telegram_setup
-
-  # ntfy topic auto-generation
-  agent_notify_ntfy_setup
-
-  # Read role from config
+  # Determine role first — it gates what gets installed
   local role
   role="$(agent_notify_read_role)"
+
+  # Plugin symlink (both roles need this)
+  agent_notify_plugin_symlink
+
+  # ntfy topics are needed on both (servers publish, main subscribes)
+  agent_notify_ntfy_setup
+
+  if [ "$role" = "server" ]; then
+    # Servers need Telegram for remote notifications
+    agent_notify_telegram_setup
+  else
+    ok "Main machine — skipping Telegram (native notifications only)"
+  fi
 
   # Service installation
   agent_notify_install_services "$role"
@@ -587,11 +591,11 @@ agent_notify_read_role() {
   # Not set or invalid — prompt interactively
   echo
   info "Machine role"
-  echo "  This determines whether the Mac listener (for native notifications)" >&2
-  echo "  is installed alongside the daemon." >&2
+  echo "  main   = your Mac — native notifications only, no Telegram" >&2
+  echo "  server = remote machine — daemon + Telegram for notifications" >&2
 
   local idx
-  idx=$(printf '%s\n' "main    — Mac with native notifications + daemon" "server  — daemon only (remote server)" | arrow_select) || {
+  idx=$(printf '%s\n' "main    — Mac with native notifications only" "server  — remote machine with Telegram" | arrow_select) || {
     warn "Cancelled — defaulting to 'server'"
     echo "server"
     return
@@ -715,6 +719,9 @@ agent_notify_ntfy_setup() {
   local events_topic="an-$(openssl rand -hex 12)"
   local ack_topic="an-ack-$(openssl rand -hex 12)"
 
+  # Ensure secrets file exists (main machine skips Telegram setup)
+  touch "$AN_SECRETS"
+
   # Append to secrets (don't overwrite Telegram values)
   {
     echo "AGENT_NOTIFY_NTFY_EVENTS=${events_topic}"
@@ -736,13 +743,18 @@ agent_notify_install_services() {
   bun_path="$(command -v bun 2>/dev/null || echo "$HOME/.bun/bin/bun")"
   local current_path="$PATH"
 
-  if [ "$os" = "darwin" ]; then
-    agent_notify_install_launchd_daemon "$bun_path" "$current_path"
-    if [ "$role" = "main" ]; then
+  if [ "$role" = "main" ]; then
+    # Main machine: listener only — no daemon, no Telegram
+    if [ "$os" = "darwin" ]; then
       agent_notify_install_launchd_listener "$bun_path" "$current_path"
     fi
-  elif [ "$os" = "linux" ]; then
-    agent_notify_install_systemd_daemon "$bun_path" "$current_path"
+  else
+    # Server: daemon only — no listener
+    if [ "$os" = "darwin" ]; then
+      agent_notify_install_launchd_daemon "$bun_path" "$current_path"
+    elif [ "$os" = "linux" ]; then
+      agent_notify_install_systemd_daemon "$bun_path" "$current_path"
+    fi
   fi
 }
 
@@ -830,52 +842,61 @@ agent_notify_validate() {
     all_ok=false
   fi
 
-  # Check secrets
-  if [ -f "$AN_SECRETS" ] && grep -q "AGENT_NOTIFY_BOT_TOKEN=." "$AN_SECRETS"; then
-    ok "Secrets configured"
+  # Check ntfy topics (both roles need these)
+  if [ -f "$AN_SECRETS" ] && grep -q "AGENT_NOTIFY_NTFY_EVENTS=." "$AN_SECRETS" 2>/dev/null; then
+    ok "ntfy topics configured"
   else
-    err "Secrets not configured"
+    warn "ntfy topics not configured"
     all_ok=false
   fi
 
-  # Check daemon
-  if [ "$os" = "darwin" ]; then
-    if launchctl list 2>/dev/null | grep -q "agent-notify-daemon"; then
-      ok "Daemon running (launchd)"
+  if [ "$role" = "main" ]; then
+    # Main: listener only
+    if [ "$os" = "darwin" ]; then
+      if launchctl list 2>/dev/null | grep -q "agent-notify-listener"; then
+        ok "Listener running (launchd)"
+      else
+        warn "Listener not detected in launchctl"
+        all_ok=false
+      fi
+    fi
+  else
+    # Server: daemon + Telegram
+    if [ -f "$AN_SECRETS" ] && grep -q "AGENT_NOTIFY_BOT_TOKEN=." "$AN_SECRETS"; then
+      ok "Telegram secrets configured"
     else
-      warn "Daemon not detected in launchctl"
+      err "Telegram secrets not configured"
       all_ok=false
     fi
-  elif [ "$os" = "linux" ]; then
-    if systemctl --user is-active agent-notify-daemon >/dev/null 2>&1; then
-      ok "Daemon running (systemd)"
-    else
-      warn "Daemon not active"
-      all_ok=false
-    fi
-  fi
 
-  # Check listener (main only)
-  if [ "$role" = "main" ] && [ "$os" = "darwin" ]; then
-    if launchctl list 2>/dev/null | grep -q "agent-notify-listener"; then
-      ok "Listener running (launchd)"
-    else
-      warn "Listener not detected in launchctl"
-      all_ok=false
+    if [ "$os" = "darwin" ]; then
+      if launchctl list 2>/dev/null | grep -q "agent-notify-daemon"; then
+        ok "Daemon running (launchd)"
+      else
+        warn "Daemon not detected in launchctl"
+        all_ok=false
+      fi
+    elif [ "$os" = "linux" ]; then
+      if systemctl --user is-active agent-notify-daemon >/dev/null 2>&1; then
+        ok "Daemon running (systemd)"
+      else
+        warn "Daemon not active"
+        all_ok=false
+      fi
     fi
-  fi
 
-  # Validate bot token
-  local token
-  token="$(grep 'AGENT_NOTIFY_BOT_TOKEN=' "$AN_SECRETS" 2>/dev/null | cut -d'=' -f2)"
-  if [ -n "$token" ] && [ "$token" != "CHANGE_ME" ]; then
-    local me_result
-    me_result="$(curl -s "https://api.telegram.org/bot${token}/getMe" 2>/dev/null)"
-    if echo "$me_result" | grep -q '"ok":true'; then
-      ok "Telegram bot token valid"
-    else
-      warn "Telegram bot token invalid"
-      all_ok=false
+    # Validate bot token
+    local token
+    token="$(grep 'AGENT_NOTIFY_BOT_TOKEN=' "$AN_SECRETS" 2>/dev/null | cut -d'=' -f2)"
+    if [ -n "$token" ] && [ "$token" != "CHANGE_ME" ]; then
+      local me_result
+      me_result="$(curl -s "https://api.telegram.org/bot${token}/getMe" 2>/dev/null)"
+      if echo "$me_result" | grep -q '"ok":true'; then
+        ok "Telegram bot token valid"
+      else
+        warn "Telegram bot token invalid"
+        all_ok=false
+      fi
     fi
   fi
 
