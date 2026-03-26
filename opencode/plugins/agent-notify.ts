@@ -106,6 +106,7 @@ export const AgentNotifyPlugin: Plugin = async ({
 
   const sessionNames = new Map<string, string>();
   const sessionsWithPendingEvents = new Set<string>();
+  let activeSessionId = "";
 
   function writeEvent(sessionId: string, type: EventType, payload: object) {
     // Dismiss any existing pending events for this session — only the
@@ -253,9 +254,12 @@ export const AgentNotifyPlugin: Plugin = async ({
         case "session.status": {
           if (!sessionId) break;
           const status = event?.properties?.status?.type ?? event?.properties?.status;
-          if (status !== "idle" && sessionsWithPendingEvents.has(sessionId)) {
-            markResponded(sessionId);
-            sessionsWithPendingEvents.delete(sessionId);
+          if (status !== "idle") {
+            activeSessionId = sessionId;
+            if (sessionsWithPendingEvents.has(sessionId)) {
+              markResponded(sessionId);
+              sessionsWithPendingEvents.delete(sessionId);
+            }
           }
           break;
         }
@@ -271,8 +275,8 @@ export const AgentNotifyPlugin: Plugin = async ({
             } catch {
               // best effort
             }
-            // Rename tmux window to match the opencode session title
-            if (process.env.TMUX) {
+            // Rename tmux window only for the active session
+            if (process.env.TMUX && sid === activeSessionId) {
               try {
                 const truncated = name.length > 30 ? name.slice(0, 27) + "..." : name;
                 Bun.spawn(["tmux", "rename-window", truncated], {
