@@ -23,10 +23,16 @@ fi
 # ── Load events ──────────────────────────────────────────────────────────────
 
 load_events() {
+  # Check if sessions table has the name column
+  local has_name
+  has_name=$(sqlite3 "$DB" "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name='name'" 2>/dev/null)
+  local name_col="''"
+  [ "$has_name" = "1" ] && name_col="COALESCE(s.name, '')"
+
   sqlite3 -separator '|' "$DB" "
     SELECT e.id, e.type, e.status, e.payload, e.created_at,
            COALESCE(s.project, 'unknown'), COALESCE(s.worktree, 'unknown'),
-           e.session_id, COALESCE(s.name, '')
+           e.session_id, ${name_col}
     FROM events e
     LEFT JOIN sessions s ON e.session_id = s.id
     WHERE e.status NOT IN ('dismissed', 'stale', 'responded')
