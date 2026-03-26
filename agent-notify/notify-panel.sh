@@ -226,7 +226,7 @@ show_detail() {
   printf "\033[2J\033[H"  # clear screen
   printf "\n"
   printf "  ${BOLD}Event Detail${RESET}\n"
-  printf "  ${DIM}enter/q/Esc back  v copy${RESET}\n\n"
+  printf "  ${DIM}enter/q/Esc back  ctrl+n close${RESET}\n\n"
   printf "  ${BOLD}Type:${RESET}      %b\n" "$(type_icon "$etype")"
   printf "  ${BOLD}Status:${RESET}    %b\n" "$(status_label "$estatus")"
   printf "  ${BOLD}Project:${RESET}   %s\n" "$proj"
@@ -284,31 +284,13 @@ show_detail() {
     local dkey
     dkey=$(dd bs=1 count=1 2>/dev/null </dev/tty)
     case "$dkey" in
-      q|""|$'\n') return ;;  # q, Enter, or newline
-      v)
-        # Copy full detail to clipboard
-        local clip_detail=""
-        [ -n "$esname" ] && clip_detail+="Session: $esname"$'\n'
-        clip_detail+="Type: $etype"$'\n'
-        clip_detail+="Project: $proj"$'\n'
-        [ "$wt" != "$proj" ] && [ "$wt" != "unknown" ] && clip_detail+="Worktree: $wt"$'\n'
-        [ -n "$server_label" ] && clip_detail+="Server: $server_label"$'\n'
-        clip_detail+="Time: $ts ($ago)"$'\n'
-        clip_detail+="Summary: $summary"$'\n'
-        clip_detail+="ID: $eid"
-        if command -v pbcopy &>/dev/null; then
-          printf '%s' "$clip_detail" | pbcopy
-        elif command -v xclip &>/dev/null; then
-          printf '%s' "$clip_detail" | xclip -selection clipboard
-        elif command -v xsel &>/dev/null; then
-          printf '%s' "$clip_detail" | xsel --clipboard
-        fi
-        ;;
+      q|""|$'\n') return 0 ;;  # q, Enter, or newline — back to list
+      $'\x0e') return 1 ;;     # ctrl+n — close entire panel
       $'\x1b')
         local s1
         s1=$(dd bs=1 count=1 2>/dev/null </dev/tty)
         if [[ "$s1" != "[" ]]; then
-          return  # bare Esc
+          return 0  # bare Esc — back to list
         fi
         dd bs=1 count=1 2>/dev/null </dev/tty >/dev/null  # consume seq char
         ;;
@@ -363,7 +345,7 @@ run_panel() {
       printf "  ${DIM}[%d-%d]${RESET}" "$((scroll + 1))" "$end"
     fi
     printf "\n"
-    printf "  ${DIM}j/k navigate  enter detail  x dismiss  v copy  ctrl+n close${RESET}\n\n"
+    printf "  ${DIM}j/k navigate  enter detail  x dismiss  ctrl+n close${RESET}\n\n"
 
     for (( i=scroll; i<end; i++ )); do
       if [[ $i -eq $cur ]]; then
@@ -436,28 +418,15 @@ run_panel() {
         _draw
         continue
         ;;
-      v)
-        # Copy current event info to clipboard
-        local etype="${EVENT_TYPES[$cur]}"
-        local esummary
-        esummary=$(extract_summary "$etype" "${EVENT_PAYLOADS[$cur]}")
-        local esname="${EVENT_SESSION_NAMES[$cur]}"
-        local eproj
-        eproj=$(basename_of "${EVENT_PROJECTS[$cur]}")
-        local clip="${esname:+$esname: }${etype}: ${esummary} (${eproj})"
-        if command -v pbcopy &>/dev/null; then
-          printf '%s' "$clip" | pbcopy
-        elif command -v xclip &>/dev/null; then
-          printf '%s' "$clip" | xclip -selection clipboard
-        elif command -v xsel &>/dev/null; then
-          printf '%s' "$clip" | xsel --clipboard
-        fi
-        ;;
       ""|$'\n')
         # Enter — show detail view
         _clear
         show_detail "$cur"
+        local detail_rc=$?
         printf "\033[2J\033[H"  # clear screen after returning
+        if [[ $detail_rc -eq 1 ]]; then
+          break  # ctrl+n pressed in detail — close panel
+        fi
         _draw
         continue
         ;;
