@@ -43,21 +43,32 @@ function migrate(db: Database): void {
     CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
     CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
   `);
+
+  // Migration: add name column to sessions if missing
+  const cols = db.prepare("PRAGMA table_info(sessions)").all() as { name: string }[];
+  if (!cols.some((c) => c.name === "name")) {
+    db.exec("ALTER TABLE sessions ADD COLUMN name TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 // ── Session helpers ─────────────────────────────────────────────────────────
 
 export function upsertSession(
   db: Database,
-  session: Pick<SessionRow, "id" | "port" | "project" | "worktree">
+  session: Pick<SessionRow, "id" | "port" | "project" | "worktree"> & { name?: string }
 ): void {
   db.prepare(
-    `INSERT INTO sessions (id, port, project, worktree)
-     VALUES (?1, ?2, ?3, ?4)
+    `INSERT INTO sessions (id, port, project, worktree, name)
+     VALUES (?1, ?2, ?3, ?4, ?5)
      ON CONFLICT(id) DO UPDATE SET
        port = excluded.port,
+       name = CASE WHEN excluded.name != '' THEN excluded.name ELSE sessions.name END,
        last_seen = unixepoch()`
-  ).run(session.id, session.port, session.project, session.worktree);
+  ).run(session.id, session.port, session.project, session.worktree, session.name ?? "");
+}
+
+export function updateSessionName(db: Database, sessionId: string, name: string): void {
+  db.prepare("UPDATE sessions SET name = ?2 WHERE id = ?1").run(sessionId, name);
 }
 
 export function updateHeartbeat(db: Database, sessionIds: string[]): void {

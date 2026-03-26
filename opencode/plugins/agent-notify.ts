@@ -20,7 +20,7 @@ import { resolve } from "node:path";
 // real path so relative imports work regardless of the symlink.
 const AGENT_NOTIFY_DIR = resolve(import.meta.dir, "../../agent-notify");
 
-const { openDB, upsertSession, updateHeartbeat, deleteSessions, insertEvent, updateEventStatus, getPendingEventsForSession } = await import(
+const { openDB, upsertSession, updateSessionName, updateHeartbeat, deleteSessions, insertEvent, updateEventStatus, getPendingEventsForSession } = await import(
   resolve(AGENT_NOTIFY_DIR, "src/db.ts")
 );
 
@@ -352,6 +352,21 @@ export const AgentNotifyPlugin: Plugin = async ({
           if (status !== "idle" && sessionsWithPendingEvents.has(sessionId)) {
             markRespondedAndDismiss(sessionId);
             sessionsWithPendingEvents.delete(sessionId);
+          }
+          break;
+        }
+
+        // ── Session updated (capture session name) ──────────────────
+        case "session.updated": {
+          const info = event?.properties?.info;
+          const sid = info?.id ?? sessionId;
+          const name = info?.title ?? info?.slug ?? "";
+          if (sid && name) {
+            try {
+              updateSessionName(db, sid, name);
+            } catch {
+              // best effort
+            }
           }
           break;
         }

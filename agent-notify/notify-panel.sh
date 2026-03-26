@@ -26,7 +26,7 @@ load_events() {
   sqlite3 -separator '|' "$DB" "
     SELECT e.id, e.type, e.status, e.payload, e.created_at,
            COALESCE(s.project, 'unknown'), COALESCE(s.worktree, 'unknown'),
-           e.session_id
+           e.session_id, COALESCE(s.name, '')
     FROM events e
     LEFT JOIN sessions s ON e.session_id = s.id
     WHERE e.status NOT IN ('dismissed', 'stale', 'responded')
@@ -110,6 +110,7 @@ declare -a EVENT_TIMES=()
 declare -a EVENT_PROJECTS=()
 declare -a EVENT_WORKTREES=()
 declare -a EVENT_SESSIONS=()
+declare -a EVENT_SESSION_NAMES=()
 declare -a DISPLAY_LINES=()
 
 refresh() {
@@ -121,6 +122,7 @@ refresh() {
   EVENT_PROJECTS=()
   EVENT_WORKTREES=()
   EVENT_SESSIONS=()
+  EVENT_SESSION_NAMES=()
   DISPLAY_LINES=()
 
   local raw
@@ -130,7 +132,7 @@ refresh() {
     return
   fi
 
-  while IFS='|' read -r eid etype estatus epayload ecreated eproject eworktree esession; do
+  while IFS='|' read -r eid etype estatus epayload ecreated eproject eworktree esession esname; do
     EVENT_IDS+=("$eid")
     EVENT_TYPES+=("$etype")
     EVENT_STATUSES+=("$estatus")
@@ -139,6 +141,7 @@ refresh() {
     EVENT_PROJECTS+=("$eproject")
     EVENT_WORKTREES+=("$eworktree")
     EVENT_SESSIONS+=("$esession")
+    EVENT_SESSION_NAMES+=("$esname")
 
     local proj
     proj=$(basename_of "$eproject")
@@ -193,6 +196,7 @@ show_detail() {
   local eworktree="${EVENT_WORKTREES[$idx]}"
   local eid="${EVENT_IDS[$idx]}"
   local esession="${EVENT_SESSIONS[$idx]}"
+  local esname="${EVENT_SESSION_NAMES[$idx]}"
 
   local proj
   proj=$(basename_of "$eproject")
@@ -225,8 +229,11 @@ show_detail() {
   [ -n "$server_label" ] && \
   printf "  ${BOLD}Server:${RESET}    %s\n" "$server_label"
   printf "  ${BOLD}Time:${RESET}      %s (%s)\n" "$ts" "$ago"
-  [ -n "$esession" ] && \
-  printf "  ${BOLD}Session:${RESET}   ${DIM}%s${RESET}\n" "$esession"
+  if [ -n "$esname" ]; then
+    printf "  ${BOLD}Session:${RESET}   %s ${DIM}(%s)${RESET}\n" "$esname" "$esession"
+  elif [ -n "$esession" ]; then
+    printf "  ${BOLD}Session:${RESET}   ${DIM}%s${RESET}\n" "$esession"
+  fi
   printf "  ${BOLD}ID:${RESET}        ${DIM}%s${RESET}\n" "$eid"
   printf "\n"
   printf "  ${BOLD}Summary:${RESET}\n"

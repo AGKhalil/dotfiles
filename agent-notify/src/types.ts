@@ -44,6 +44,7 @@ export interface SessionRow {
   port: number;
   project: string;
   worktree: string;
+  name: string;
   created_at: number;
   last_seen: number;
 }
