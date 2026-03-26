@@ -842,6 +842,27 @@ agent_notify_ntfy_setup() {
 
 # ── terminal-notifier (dismissable macOS notifications) ──────────────────────
 
+install_ntfy_server() {
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q '^ntfy$'; then
+    ok "ntfy server already running"
+    return
+  fi
+
+  if ! command -v docker &>/dev/null; then
+    warn "Docker not found — install Docker to run self-hosted ntfy"
+    return
+  fi
+
+  info "Starting self-hosted ntfy server via Docker..."
+  mkdir -p "$HOME/.local/share/ntfy/cache"
+  docker run -d --name ntfy --restart unless-stopped \
+    -p 8090:80 \
+    -v "$HOME/.local/share/ntfy/cache:/var/cache/ntfy" \
+    binwiederhier/ntfy serve --cache-file /var/cache/ntfy/cache.db \
+    >/dev/null 2>&1
+  ok "ntfy server running on http://localhost:8090"
+}
+
 install_terminal_notifier() {
   if command -v terminal-notifier &>/dev/null; then
     ok "terminal-notifier already installed"
@@ -871,6 +892,7 @@ agent_notify_install_services() {
   if [ "$role" = "main" ]; then
     # Main machine: daemon (ntfy only, no Telegram) + listener
     if [ "$os" = "darwin" ]; then
+      install_ntfy_server
       install_terminal_notifier
       agent_notify_install_launchd_daemon "$bun_path" "$current_path"
       agent_notify_install_launchd_listener "$bun_path" "$current_path"

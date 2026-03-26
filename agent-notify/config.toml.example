@@ -16,7 +16,7 @@ chat_id   = "env:AGENT_NOTIFY_CHAT_ID"
 [ntfy]
 events_topic = "env:AGENT_NOTIFY_NTFY_EVENTS"
 ack_topic    = "env:AGENT_NOTIFY_NTFY_ACK"
-# server     = "https://ntfy.sh"  # or self-hosted URL
+server     = "http://localhost:8090"  # self-hosted ntfy (forwarded via SSH on servers)
 
 [delays]
 # Seconds to wait for Mac ACK before escalating to Telegram
