@@ -271,6 +271,18 @@ export const AgentNotifyPlugin: Plugin = async ({
             } catch {
               // best effort
             }
+            // Rename tmux window to match the opencode session title
+            if (process.env.TMUX) {
+              try {
+                const truncated = name.length > 30 ? name.slice(0, 27) + "..." : name;
+                Bun.spawn(["tmux", "rename-window", truncated], {
+                  stdout: "ignore",
+                  stderr: "ignore",
+                });
+              } catch {
+                // best effort
+              }
+            }
           }
           break;
         }
