@@ -177,6 +177,7 @@ async function handleEvent(event: NtfyEventPayload): Promise<void> {
       port: 0,
       project: event.project,
       worktree: event.worktree,
+      name: event.session_name,
     });
 
     // Skip duplicate events (same event_id from retries)
