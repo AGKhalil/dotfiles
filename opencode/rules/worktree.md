@@ -20,6 +20,15 @@ and tell the user** to create a worktree first:
 - You're already on a feature branch / in a worktree
 - The task is read-only (exploration, questions, planning)
 
+## Commit Policy
+
+Commit after every completed todo item. Each todo completion should result in
+its own commit with a concise message describing what was done. Do not batch
+multiple todo items into a single commit.
+
+This keeps the history granular, makes reverts easy, and gives the user
+visibility into incremental progress.
+
 ## Context
 
 This project uses Worktrunk (`wt`) for git worktree management. Useful commands:
