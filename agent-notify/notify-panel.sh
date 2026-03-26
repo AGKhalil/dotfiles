@@ -195,6 +195,7 @@ run_panel() {
     elif [[ $cur -ge $((scroll + max_visible)) ]]; then
       scroll=$((cur - max_visible + 1))
     fi
+    return 0
   }
 
   _draw() {
