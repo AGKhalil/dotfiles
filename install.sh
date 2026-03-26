@@ -590,13 +590,13 @@ agent_notify_read_role() {
 
   # Not set or invalid — prompt interactively
   echo >&2
-  info "Machine role"
+  info "Machine role" >&2
   echo "  main   = your Mac — native notifications only, no Telegram" >&2
   echo "  server = remote machine — daemon + Telegram for notifications" >&2
 
   local idx
   idx=$(printf '%s\n' "main    — Mac with native notifications only" "server  — remote machine with Telegram" | arrow_select) || {
-    warn "Cancelled — defaulting to 'server'"
+    warn "Cancelled — defaulting to 'server'" >&2
     echo "server"
     return
   }
