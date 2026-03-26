@@ -109,6 +109,25 @@ link_it() {
   ok "$dst → $src"
 }
 
+# ── Bun ──────────────────────────────────────────────────────────────────────
+
+install_bun() {
+  if command -v bun &>/dev/null; then
+    ok "bun already installed: $(bun --version)"
+    return
+  fi
+
+  # Also check the default install location
+  if [ -x "$HOME/.bun/bin/bun" ]; then
+    ok "bun already installed: $($HOME/.bun/bin/bun --version)"
+    return
+  fi
+
+  info "Installing Bun..."
+  curl -fsSL https://bun.sh/install | bash
+  ok "bun installed to ~/.bun/bin/bun"
+}
+
 # ── Neovim (prebuilt tarball, no sudo/FUSE required) ────────────────────────
 
 install_nvim() {
@@ -612,6 +631,7 @@ main() {
   echo
 
   ensure_path
+  install_bun
   install_nvim
   install_opencode_binary
   install_worktrunk
