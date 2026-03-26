@@ -9,7 +9,7 @@
 
 import { loadConfig } from "./src/config";
 import type { NtfyEventPayload, NtfyAckPayload, EventType } from "./src/types";
-import { $ } from "bun";
+
 
 const config = loadConfig();
 const ntfyBase = config.ntfy.server ?? "https://ntfy.sh";
@@ -27,14 +27,15 @@ async function showNotification(
   try {
     const esc = (s: string) =>
       s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    const parts = [
-      `display notification "${esc(body)}"`,
-      `with title "${esc(title)}"`,
-    ];
+    let script = `display notification "${esc(body)}" with title "${esc(title)}"`;
     if (subtitle) {
-      parts.push(`subtitle "${esc(subtitle)}"`);
+      script += ` subtitle "${esc(subtitle)}"`;
     }
-    await $`osascript -e ${parts.join(" ")}`;
+    const proc = Bun.spawn(["osascript", "-e", script], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    await proc.exited;
   } catch (err) {
     console.error("[listener] Failed to show notification:", err);
   }
