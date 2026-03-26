@@ -6,6 +6,7 @@ set -euo pipefail
 
 DB="$HOME/.local/share/agent-notify/registry.db"
 CYAN="\033[1;36m"
+BLUE="\033[1;34m"
 DIM="\033[2m"
 BOLD="\033[1m"
 YELLOW="\033[1;33m"
@@ -13,6 +14,27 @@ RED="\033[1;31m"
 GREEN="\033[1;32m"
 MAGENTA="\033[1;35m"
 RESET="\033[0m"
+
+# ── Source colors (main=blue, servers cycle green/yellow/magenta/cyan/red) ──
+
+declare -A SOURCE_COLOR_MAP=()
+declare -a SERVER_COLORS=("$GREEN" "$YELLOW" "$MAGENTA" "$CYAN" "$RED")
+SERVER_COLOR_IDX=0
+
+source_color() {
+  local src="$1"
+  if [ "$src" = "main" ]; then
+    printf '%b' "$BLUE"
+    return
+  fi
+  if [ -n "${SOURCE_COLOR_MAP[$src]+x}" ]; then
+    printf '%b' "${SOURCE_COLOR_MAP[$src]}"
+    return
+  fi
+  SOURCE_COLOR_MAP[$src]="${SERVER_COLORS[$SERVER_COLOR_IDX]}"
+  SERVER_COLOR_IDX=$(( (SERVER_COLOR_IDX + 1) % ${#SERVER_COLORS[@]} ))
+  printf '%b' "${SOURCE_COLOR_MAP[$src]}"
+}
 
 if [ ! -f "$DB" ]; then
   echo "No notifications"
@@ -171,8 +193,10 @@ refresh() {
       fi
     fi
 
+    local scolor
+    scolor=$(source_color "$source")
     local line
-    line=$(printf "${DIM}[${RESET}%s${DIM}]${RESET} %s  %-10b ${DIM}%-8s${RESET}" \
+    line=$(printf "${DIM}[${RESET}${scolor}%s${RESET}${DIM}]${RESET} %s  %-10b ${DIM}%-8s${RESET}" \
       "$source" \
       "$name" \
       "$(type_icon "$etype")" \
