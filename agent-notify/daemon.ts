@@ -62,6 +62,9 @@ console.log(`[daemon] Role: ${config.role}, Telegram: ${hasTelegram ? "yes" : "n
 /** Events waiting for Mac ACK before escalating to Telegram. */
 const escalationTimers = new Map<string, Timer>();
 
+/** Events where ntfy has been sent, to avoid re-sending on each poll. */
+const ntfySent = new Set<string>();
+
 /** Events where we sent a "Type custom — reply to this message" prompt.
  *  Maps Telegram message_id → event ID. */
 const customReplyPrompts = new Map<number, string>();
@@ -153,14 +156,18 @@ function handleAck(ack: NtfyAckPayload): void {
   const eventId = ack.event_id;
   if (!eventId) return;
 
-  // Cancel the escalation timer
+  ntfySent.delete(eventId);
+
+  // Cancel the escalation timer if present
   const timer = escalationTimers.get(eventId);
   if (timer) {
     clearTimeout(timer);
     escalationTimers.delete(eventId);
-    updateEventStatus(db, eventId, "mac_acked");
     console.log(`[daemon] ACK received for event ${eventId}, Telegram suppressed`);
   }
+
+  // Always mark as mac_acked on ACK
+  updateEventStatus(db, eventId, "mac_acked");
 }
 
 // ── Escalation pipeline ─────────────────────────────────────────────────────
@@ -170,6 +177,10 @@ function getDelay(eventType: EventType): number {
 }
 
 async function processEvent(event: EventRow): Promise<void> {
+  // Skip if ntfy already sent for this event (avoid re-sending on each poll)
+  if (ntfySent.has(event.id)) return;
+  ntfySent.add(event.id);
+
   const session = getSession(db, event.session_id);
   const payload = JSON.parse(event.payload);
 
@@ -185,7 +196,9 @@ async function processEvent(event: EventRow): Promise<void> {
   };
   await sendNtfy(ntfyPayload);
 
-  // 2. If Telegram is configured, start escalation timer; otherwise mark done
+  // 2. If Telegram is configured, start escalation timer.
+  // ACK from listener will cancel the timer via handleAck.
+  // Without Telegram, the event stays pending until ACK arrives.
   if (hasTelegram) {
     const delay = getDelay(event.type as EventType);
     const timer = setTimeout(() => {
@@ -193,9 +206,6 @@ async function processEvent(event: EventRow): Promise<void> {
       sendTelegramNotification(event, session, payload);
     }, delay);
     escalationTimers.set(event.id, timer);
-  } else {
-    // No Telegram — ntfy sent, nothing more to do
-    updateEventStatus(db, event.id, "mac_acked");
   }
 }
 

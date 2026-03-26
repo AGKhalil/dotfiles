@@ -2,22 +2,17 @@
  * agent-notify — OpenCode plugin for session event detection.
  *
  * Detects idle, error, question, and permission events, writes them to a
- * shared SQLite registry so the per-server daemon can pick them up and
- * route notifications (ntfy → Mac, escalation → Telegram).
+ * shared SQLite registry.  The daemon polls the DB, sends notifications
+ * via ntfy to the Mac listener, and escalates to Telegram if unacknowledged.
  *
- * On macOS, the plugin shows notifications directly via terminal-notifier
- * (works from any tmux pane, including SSH inner sessions on the Mac).
- * When terminal-notifier is not available (remote server), the daemon
- * handles notification delivery via ntfy and Telegram.
+ * The plugin is intentionally thin — it only writes to the DB and marks
+ * events as responded when the user resumes activity.  All notification
+ * display and dismiss logic lives in the daemon + listener.
  */
 
 import type { Plugin } from "@opencode-ai/plugin";
 import { resolve } from "node:path";
 
-// Shared modules live in the agent-notify directory which is a sibling of
-// the opencode directory in the dotfiles repo.  At runtime the plugin is
-// loaded from ~/.config/opencode/plugins/ (a symlink).  We resolve the
-// real path so relative imports work regardless of the symlink.
 const AGENT_NOTIFY_DIR = resolve(import.meta.dir, "../../agent-notify");
 
 const { openDB, upsertSession, updateSessionName, updateHeartbeat, deleteSessions, insertEvent, updateEventStatus, getPendingEventsForSession } = await import(
@@ -26,13 +21,10 @@ const { openDB, upsertSession, updateSessionName, updateHeartbeat, deleteSession
 
 type EventType = "done" | "error" | "question" | "permission";
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
-
 function uuid(): string {
   return crypto.randomUUID();
 }
 
-/** Best-effort extraction of the OpenCode server port from the SDK client. */
 async function discoverPort(client: any): Promise<number> {
   try {
     const baseUrl: string | undefined =
@@ -40,7 +32,6 @@ async function discoverPort(client: any): Promise<number> {
       client?.options?.baseUrl ??
       client?._baseUrl ??
       client?._options?.baseUrl;
-
     if (baseUrl) {
       const url = new URL(baseUrl);
       if (url.port) return Number(url.port);
@@ -48,74 +39,11 @@ async function discoverPort(client: any): Promise<number> {
   } catch {
     // ignore
   }
-
   try {
     await client.global.health();
     return 4096;
   } catch {
     return 4096;
-  }
-}
-
-// ── Direct macOS notifications via terminal-notifier ────────────────────────
-
-let hasTerminalNotifier: boolean | null = null;
-
-async function checkTerminalNotifier(): Promise<boolean> {
-  if (hasTerminalNotifier !== null) return hasTerminalNotifier;
-  try {
-    const proc = Bun.spawn(["which", "terminal-notifier"], {
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    const code = await proc.exited;
-    hasTerminalNotifier = code === 0;
-  } catch {
-    hasTerminalNotifier = false;
-  }
-  return hasTerminalNotifier;
-}
-
-async function showNotification(
-  title: string,
-  body: string,
-  group: string
-): Promise<void> {
-  if (!(await checkTerminalNotifier())) return;
-  try {
-    const proc = Bun.spawn(
-      ["terminal-notifier", "-title", title, "-message", body, "-group", group],
-      { stdout: "ignore", stderr: "ignore" }
-    );
-    await proc.exited;
-  } catch {
-    // best effort
-  }
-}
-
-async function dismissNotifications(): Promise<void> {
-  if (!(await checkTerminalNotifier())) return;
-  try {
-    const proc = Bun.spawn(
-      ["terminal-notifier", "-remove", "ALL"],
-      { stdout: "ignore", stderr: "ignore" }
-    );
-    await proc.exited;
-  } catch {
-    // best effort
-  }
-}
-
-function formatEventSummary(type: EventType, payload: any): string {
-  switch (type) {
-    case "done":
-      return `Done: ${payload.summary ?? "Session completed"}`;
-    case "error":
-      return `Error: ${payload.message ?? "Agent error"}`;
-    case "question":
-      return `Question: ${payload.text ?? "Agent has a question"}`;
-    case "permission":
-      return `Permission: ${payload.tool}: ${payload.action}`;
   }
 }
 
@@ -176,64 +104,34 @@ export const AgentNotifyPlugin: Plugin = async ({
 
   // ── Event helpers ───────────────────────────────────────────────────────
 
-  /** Track event IDs per session so we can dismiss them later. */
-  const sessionEventIds = new Map<string, string[]>();
-
-  /** Cache session names as they arrive via session.updated. */
   const sessionNames = new Map<string, string>();
+  const sessionsWithPendingEvents = new Set<string>();
 
   function writeEvent(sessionId: string, type: EventType, payload: object) {
-    const eventId = uuid();
     try {
       insertEvent(db, {
-        id: eventId,
+        id: uuid(),
         session_id: sessionId,
         type,
         payload: JSON.stringify(payload),
       });
     } catch (err) {
       console.error("[agent-notify] Failed to write event:", err);
-      return;
     }
-
-    // Track event ID for later dismiss
-    const ids = sessionEventIds.get(sessionId) ?? [];
-    ids.push(eventId);
-    sessionEventIds.set(sessionId, ids);
-
-    // Show notification directly via terminal-notifier
-    const body = formatEventSummary(type, payload);
-    const title = sessionNames.get(sessionId) || projectName;
-    showNotification(title, body, eventId);
   }
 
-  /** Mark all pending events for a session as responded and dismiss notifications. */
-  async function markRespondedAndDismiss(sessionId: string) {
-    // Dismiss notifications directly if terminal-notifier is available (Mac),
-    // otherwise mark as responded so the daemon sends dismiss via ntfy.
-    const canDismissLocally = await checkTerminalNotifier();
-    if (canDismissLocally) {
-      dismissNotifications();
-    }
-    sessionEventIds.delete(sessionId);
-
-    // On Mac: mark dismissed directly (ctrl+n panel clears them).
-    // On server: mark responded so daemon picks them up, sends dismiss
-    // via ntfy to Mac listener, then moves to dismissed.
-    const targetStatus = canDismissLocally ? "dismissed" : "responded";
+  /** Mark all pending events for a session as responded.
+   *  The daemon will pick these up and send dismiss via ntfy. */
+  function markResponded(sessionId: string) {
     try {
       const pending = getPendingEventsForSession(db, sessionId);
       for (const evt of pending) {
-        updateEventStatus(db, evt.id, targetStatus);
+        updateEventStatus(db, evt.id, "responded");
       }
     } catch {
       // best effort
     }
   }
-
-  // Track which sessions are "idle with pending event" so we can detect
-  // when they resume activity (TUI-answered detection).
-  const sessionsWithPendingEvents = new Set<string>();
 
   // ── Classify idle reason ──────────────────────────────────────────────
 
@@ -306,14 +204,12 @@ export const AgentNotifyPlugin: Plugin = async ({
       }
 
       switch (type) {
-        // ── Session idle (done or question) ───────────────────────────
         case "session.idle": {
           if (!sessionId) break;
           await classifyIdle(sessionId);
           break;
         }
 
-        // ── Session error ─────────────────────────────────────────────
         case "session.error": {
           if (!sessionId) break;
           const message =
@@ -325,7 +221,6 @@ export const AgentNotifyPlugin: Plugin = async ({
           break;
         }
 
-        // ── Permission requested ──────────────────────────────────────
         case "permission.asked": {
           if (!sessionId) break;
           const permissionId =
@@ -347,20 +242,16 @@ export const AgentNotifyPlugin: Plugin = async ({
           break;
         }
 
-        // ── Session status change (detect user activity) ──────────────
         case "session.status": {
           if (!sessionId) break;
           const status = event?.properties?.status?.type ?? event?.properties?.status;
-          // Any non-idle status means the session is active — user responded
-          // to a prompt, granted permission, or sent a new message.
           if (status !== "idle" && sessionsWithPendingEvents.has(sessionId)) {
-            markRespondedAndDismiss(sessionId);
+            markResponded(sessionId);
             sessionsWithPendingEvents.delete(sessionId);
           }
           break;
         }
 
-        // ── Session updated (capture session name) ──────────────────
         case "session.updated": {
           const info = event?.properties?.info;
           const sid = info?.id ?? sessionId;

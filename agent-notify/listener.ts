@@ -72,6 +72,9 @@ function formatEvent(type: EventType, summary: string): string {
   }
 }
 
+/** Track event IDs we've already shown notifications for (in-memory dedup). */
+const shownEvents = new Set<string>();
+
 // ── ACK sender ──────────────────────────────────────────────────────────────
 
 async function sendAck(eventId: string): Promise<void> {
@@ -168,6 +171,13 @@ async function subscribe(): Promise<void> {
 async function handleEvent(event: NtfyEventPayload): Promise<void> {
   console.log(`[listener] Event received: ${event.type} (${event.event_id})`);
 
+  // Skip if we've already shown this notification (ntfy replay / retries)
+  if (shownEvents.has(event.event_id)) {
+    console.log(`[listener] Skipping already-shown event ${event.event_id}`);
+    return;
+  }
+  shownEvents.add(event.event_id);
+
   // Write to local SQLite for the ctrl+n panel
   try {
     // Ensure a session row exists for grouping
@@ -180,21 +190,18 @@ async function handleEvent(event: NtfyEventPayload): Promise<void> {
       name: event.session_name,
     });
 
-    // Skip duplicate events (same event_id from retries)
-    if (getEvent(db, event.event_id)) {
-      console.log(`[listener] Skipping duplicate event ${event.event_id}`);
-      return;
+    // Insert event if not already in DB (remote events won't be)
+    if (!getEvent(db, event.event_id)) {
+      insertEvent(db, {
+        id: event.event_id,
+        session_id: sessionId,
+        type: event.type,
+        payload: JSON.stringify({
+          summary: event.summary,
+          server_label: event.server_label,
+        }),
+      });
     }
-
-    insertEvent(db, {
-      id: event.event_id,
-      session_id: sessionId,
-      type: event.type,
-      payload: JSON.stringify({
-        summary: event.summary,
-        server_label: event.server_label,
-      }),
-    });
   } catch (err) {
     console.error("[listener] Failed to write to SQLite:", err);
   }
