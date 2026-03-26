@@ -180,17 +180,36 @@ run_panel() {
   fi
 
   local cur=0
+  local scroll=0
+  # Reserve 4 lines for header, and cap visible items
+  local max_visible=14
 
   printf "\033[?25l"
   local saved_tty
   saved_tty=$(stty -g </dev/tty 2>/dev/null)
   stty -echo -icanon min 1 </dev/tty 2>/dev/null
 
+  _scroll_into_view() {
+    if [[ $cur -lt $scroll ]]; then
+      scroll=$cur
+    elif [[ $cur -ge $((scroll + max_visible)) ]]; then
+      scroll=$((cur - max_visible + 1))
+    fi
+  }
+
   _draw() {
+    local end=$((scroll + max_visible))
+    [[ $end -gt $count ]] && end=$count
+
     printf "\n"
-    printf "  ${BOLD}Notifications${RESET}  ${DIM}(%d)${RESET}\n" "$count"
+    printf "  ${BOLD}Notifications${RESET}  ${DIM}(%d)${RESET}" "$count"
+    if [[ $count -gt $max_visible ]]; then
+      printf "  ${DIM}[%d-%d]${RESET}" "$((scroll + 1))" "$end"
+    fi
+    printf "\n"
     printf "  ${DIM}j/k navigate  space dismiss  ctrl+n close${RESET}\n\n"
-    for i in "${!DISPLAY_LINES[@]}"; do
+
+    for (( i=scroll; i<end; i++ )); do
       if [[ $i -eq $cur ]]; then
         printf "  ${CYAN}>${RESET} %b\n" "${DISPLAY_LINES[$i]}"
       else
@@ -200,13 +219,15 @@ run_panel() {
   }
 
   _clear() {
-    # Each display line may be 1 or 2 terminal lines (summary on second line)
-    local total_lines=4  # header + subtitle + blank + footer
-    for line in "${DISPLAY_LINES[@]}"; do
+    local end=$((scroll + max_visible))
+    [[ $end -gt $count ]] && end=$count
+
+    # 4 = blank + header + help + blank
+    local total_lines=4
+    for (( i=scroll; i<end; i++ )); do
       total_lines=$((total_lines + 1))
-      # Count embedded newlines
       local nl_count
-      nl_count=$(printf '%b' "$line" | grep -c '^' || true)
+      nl_count=$(printf '%b' "${DISPLAY_LINES[$i]}" | grep -c '^' || true)
       if [ "$nl_count" -gt 1 ]; then
         total_lines=$((total_lines + nl_count - 1))
       fi
@@ -229,8 +250,8 @@ run_panel() {
         seq2=$(dd bs=1 count=1 2>/dev/null </dev/tty)
         if [[ "$seq1" == "[" ]]; then
           case "$seq2" in
-            A) [[ $cur -gt 0 ]] && cur=$((cur - 1)) ;;
-            B) [[ $cur -lt $((count - 1)) ]] && cur=$((cur + 1)) ;;
+            A) [[ $cur -gt 0 ]] && cur=$((cur - 1)); _scroll_into_view ;;
+            B) [[ $cur -lt $((count - 1)) ]] && cur=$((cur + 1)); _scroll_into_view ;;
           esac
         else
           # Bare escape — close
@@ -243,9 +264,11 @@ run_panel() {
         ;;
       k)
         [[ $cur -gt 0 ]] && cur=$((cur - 1))
+        _scroll_into_view
         ;;
       j)
         [[ $cur -lt $((count - 1)) ]] && cur=$((cur + 1))
+        _scroll_into_view
         ;;
       " ")
         # Dismiss selected event
@@ -262,6 +285,7 @@ run_panel() {
         if [ "$cur" -ge "$count" ]; then
           cur=$((count - 1))
         fi
+        _scroll_into_view
         _draw
         continue
         ;;
