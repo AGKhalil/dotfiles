@@ -572,6 +572,7 @@ setup_agent_notify() {
 agent_notify_plugin_symlink() {
   link_it "$AN_DIR/../opencode/plugins/agent-notify.ts" \
           "$HOME/.config/opencode/plugins/agent-notify.ts"
+  link_it "$AN_DIR/notify-panel.sh" "$HOME/.local/bin/agent-notify-panel"
 }
 
 agent_notify_read_role() {
