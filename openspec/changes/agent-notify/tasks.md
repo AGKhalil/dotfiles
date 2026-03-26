@@ -1,90 +1,90 @@
 ## 1. Project scaffolding and shared modules
 
-- [ ] 1.1 Create `agent-notify/` directory structure in dotfiles: `daemon.ts`, `listener.ts`, `config.toml`, and `src/` for shared modules
-- [ ] 1.2 Create shared SQLite schema module (`src/db.ts`): define `sessions` and `events` tables, initialize database at `~/.local/share/agent-notify/registry.db`, enable WAL mode
-- [ ] 1.3 Create shared types module (`src/types.ts`): event types (`done`, `error`, `question`, `permission`), event payloads, registry row types, config schema
-- [ ] 1.4 Create config loader module (`src/config.ts`): read `config.toml`, resolve `env:` references from secrets file, validate required fields (bot token, chat ID, ntfy topics, role)
+- [x] 1.1 Create `agent-notify/` directory structure in dotfiles: `daemon.ts`, `listener.ts`, `config.toml`, and `src/` for shared modules
+- [x] 1.2 Create shared SQLite schema module (`src/db.ts`): define `sessions` and `events` tables, initialize database at `~/.local/share/agent-notify/registry.db`, enable WAL mode
+- [x] 1.3 Create shared types module (`src/types.ts`): event types (`done`, `error`, `question`, `permission`), event payloads, registry row types, config schema
+- [x] 1.4 Create config loader module (`src/config.ts`): read `config.toml`, resolve `env:` references from secrets file, validate required fields (bot token, chat ID, ntfy topics, role)
 
 ## 2. OpenCode plugin (event detection)
 
-- [ ] 2.1 Create `opencode/plugins/agent-notify.ts` plugin skeleton: export plugin function receiving `{ project, client, $, directory, worktree }`, return event hooks
-- [ ] 2.2 Spike: determine how to extract the OpenCode server port from the plugin context (inspect `client` object, try `client.global.health()`, fallback to `lsof`)
-- [ ] 2.3 Implement session registration: on `session.created` event, insert session row in SQLite with session ID, port, project, worktree
-- [ ] 2.4 Implement heartbeat: set up interval (every 30s) to update `last_seen` for all sessions owned by this plugin instance
-- [ ] 2.5 Implement event classification: on `session.idle`, inspect last message parts via `client.session.messages()` to determine if idle is `done` vs `question` (askquestion tool in `waiting` state)
-- [ ] 2.6 Spike: log full event payloads for `session.idle`, `session.error`, `permission.asked`, and `message.part.updated` to determine exact shapes and available fields
-- [ ] 2.7 Implement `session.error` handler: write `error` event to registry with error message
-- [ ] 2.8 Implement `permission.asked` handler: write `permission` event to registry with permission ID, tool name, and action details
-- [ ] 2.9 Implement TUI-answered detection: when a session with a pending event resumes activity (new `message.updated` or session leaves idle), update event status to `responded`
-- [ ] 2.10 Implement cleanup on shutdown: delete session rows for this instance from registry on process exit (handle SIGTERM, SIGINT)
+- [x] 2.1 Create `opencode/plugins/agent-notify.ts` plugin skeleton: export plugin function receiving `{ project, client, $, directory, worktree }`, return event hooks
+- [x] 2.2 Spike: determine how to extract the OpenCode server port from the plugin context (inspect `client` object, try `client.global.health()`, fallback to `lsof`)
+- [x] 2.3 Implement session registration: on `session.created` event, insert session row in SQLite with session ID, port, project, worktree
+- [x] 2.4 Implement heartbeat: set up interval (every 30s) to update `last_seen` for all sessions owned by this plugin instance
+- [x] 2.5 Implement event classification: on `session.idle`, inspect last message parts via `client.session.messages()` to determine if idle is `done` vs `question` (askquestion tool in `waiting` state)
+- [x] 2.6 Spike: log full event payloads for `session.idle`, `session.error`, `permission.asked`, and `message.part.updated` to determine exact shapes and available fields
+- [x] 2.7 Implement `session.error` handler: write `error` event to registry with error message
+- [x] 2.8 Implement `permission.asked` handler: write `permission` event to registry with permission ID, tool name, and action details
+- [x] 2.9 Implement TUI-answered detection: when a session with a pending event resumes activity (new `message.updated` or session leaves idle), update event status to `responded`
+- [x] 2.10 Implement cleanup on shutdown: delete session rows for this instance from registry on process exit (handle SIGTERM, SIGINT)
 
 ## 3. Telegram bot client
 
-- [ ] 3.1 Create Telegram API client module (`src/telegram.ts`): wrapper around `fetch` for `sendMessage`, `editMessageText`, `answerCallbackQuery`, `getUpdates`, `getMe`
-- [ ] 3.2 Implement `sendMessage` with `InlineKeyboardMarkup`: build keyboard from event type (question options, permission allow/deny, error retry/abort, done continue)
-- [ ] 3.3 Implement callback_data encoding/decoding: `r|<8-char-prefix>|<index>` for responses, `p|<8-char-prefix>|a|d` for permissions — validate 64-byte limit
-- [ ] 3.4 Implement `editMessageText` helper for updating notifications on state changes (answered, stale, response confirmed)
-- [ ] 3.5 Implement `getUpdates` long-polling loop with offset tracking and 30s timeout
+- [x] 3.1 Create Telegram API client module (`src/telegram.ts`): wrapper around `fetch` for `sendMessage`, `editMessageText`, `answerCallbackQuery`, `getUpdates`, `getMe`
+- [x] 3.2 Implement `sendMessage` with `InlineKeyboardMarkup`: build keyboard from event type (question options, permission allow/deny, error retry/abort, done continue)
+- [x] 3.3 Implement callback_data encoding/decoding: `r|<8-char-prefix>|<index>` for responses, `p|<8-char-prefix>|a|d` for permissions — validate 64-byte limit
+- [x] 3.4 Implement `editMessageText` helper for updating notifications on state changes (answered, stale, response confirmed)
+- [x] 3.5 Implement `getUpdates` long-polling loop with offset tracking and 30s timeout
 
 ## 4. Notification daemon
 
-- [ ] 4.1 Create `daemon.ts` entry point: load config, initialize SQLite, start event watcher and Telegram poller
-- [ ] 4.2 Implement event watcher: poll SQLite `events` table for rows with status `pending`, process each through the escalation pipeline
-- [ ] 4.3 Implement ntfy sender: POST event JSON to configured ntfy events topic for Mac listener delivery
-- [ ] 4.4 Implement escalation timer: after sending ntfy, start a delay timer (configurable per event type). Listen for ACK on ntfy ACK topic (SSE subscription). If ACK received, update status to `mac_acked` and suppress/extend Telegram delay. If timeout, send Telegram.
-- [ ] 4.5 Implement Telegram notification sender: format message text per event type (server label, worktree, summary), attach inline keyboard, store `telegram_msg_id` in registry
-- [ ] 4.6 Implement Telegram response router: on callback_query, parse callback_data, look up full session ID and port in registry, POST to `localhost:<port>/session/<id>/prompt` or permissions endpoint
-- [ ] 4.7 Implement free-text reply handling: match `reply_to_message_id` to event in registry, forward text to OpenCode session
-- [ ] 4.8 Implement stale session detector: periodically check `last_seen` timestamps, mark stale sessions, update Telegram messages via `editMessageText`
-- [ ] 4.9 Implement Telegram message updates on registry state changes: watch for `responded` status (TUI-answered), `stale` status, and successful routing — update corresponding Telegram messages
-- [ ] 4.10 Implement "Type custom" flow: on callback, send Telegram message "Reply to this message with your answer", then match the user's reply back to the event
+- [x] 4.1 Create `daemon.ts` entry point: load config, initialize SQLite, start event watcher and Telegram poller
+- [x] 4.2 Implement event watcher: poll SQLite `events` table for rows with status `pending`, process each through the escalation pipeline
+- [x] 4.3 Implement ntfy sender: POST event JSON to configured ntfy events topic for Mac listener delivery
+- [x] 4.4 Implement escalation timer: after sending ntfy, start a delay timer (configurable per event type). Listen for ACK on ntfy ACK topic (SSE subscription). If ACK received, update status to `mac_acked` and suppress/extend Telegram delay. If timeout, send Telegram.
+- [x] 4.5 Implement Telegram notification sender: format message text per event type (server label, worktree, summary), attach inline keyboard, store `telegram_msg_id` in registry
+- [x] 4.6 Implement Telegram response router: on callback_query, parse callback_data, look up full session ID and port in registry, POST to `localhost:<port>/session/<id>/prompt` or permissions endpoint
+- [x] 4.7 Implement free-text reply handling: match `reply_to_message_id` to event in registry, forward text to OpenCode session
+- [x] 4.8 Implement stale session detector: periodically check `last_seen` timestamps, mark stale sessions, update Telegram messages via `editMessageText`
+- [x] 4.9 Implement Telegram message updates on registry state changes: watch for `responded` status (TUI-answered), `stale` status, and successful routing — update corresponding Telegram messages
+- [x] 4.10 Implement "Type custom" flow: on callback, send Telegram message "Reply to this message with your answer", then match the user's reply back to the event
 
 ## 5. Mac listener
 
-- [ ] 5.1 Create `listener.ts` entry point: load config, subscribe to ntfy events topic via SSE
-- [ ] 5.2 Implement macOS notification display: parse event JSON, call `osascript` to show notification with title "{worktree} ({server})" and body per event type
-- [ ] 5.3 Implement ACK sender: after displaying notification, POST ACK JSON (event ID) to ntfy ACK topic
-- [ ] 5.4 Implement SSE reconnection with exponential backoff: on connection loss, retry starting at 1s, max 60s
+- [x] 5.1 Create `listener.ts` entry point: load config, subscribe to ntfy events topic via SSE
+- [x] 5.2 Implement macOS notification display: parse event JSON, call `osascript` to show notification with title "{worktree} ({server})" and body per event type
+- [x] 5.3 Implement ACK sender: after displaying notification, POST ACK JSON (event ID) to ntfy ACK topic
+- [x] 5.4 Implement SSE reconnection with exponential backoff: on connection loss, retry starting at 1s, max 60s
 
 ## 6. Configuration and secrets
 
-- [ ] 6.1 Create `agent-notify/config.toml` template with all configurable fields: machine role, telegram section (env refs), ntfy section (env refs), delay section (per-event-type defaults)
-- [ ] 6.2 Create secrets file structure at `~/.config/agent-notify/secrets`: store bot token, chat ID, ntfy topics — ensure path is outside git-tracked dotfiles
+- [x] 6.1 Create `agent-notify/config.toml` template with all configurable fields: machine role, telegram section (env refs), ntfy section (env refs), delay section (per-event-type defaults)
+- [x] 6.2 Create secrets file structure at `~/.config/agent-notify/secrets`: store bot token, chat ID, ntfy topics — ensure path is outside git-tracked dotfiles
 
 ## 7. Install script integration
 
-- [ ] 7.1 Add interactive Telegram setup to install script: prompt for bot token, validate via `getMe`, prompt user to send message, detect chat ID via `getUpdates`, send test message, save to secrets file
-- [ ] 7.2 Add ntfy topic auto-generation: generate two random topic strings if not already configured
-- [ ] 7.3 Add plugin symlink step: symlink `opencode/plugins/agent-notify.ts` to `~/.config/opencode/plugins/agent-notify.ts`
-- [ ] 7.4 Create launchd plist for daemon (`com.agkhalil.agent-notify-daemon.plist`): configure `ProgramArguments` to run `bun run daemon.ts`, `KeepAlive: true`, `RunAtLoad: true`, stdout/stderr to log files
-- [ ] 7.5 Create systemd user unit for daemon (`agent-notify-daemon.service`): configure `ExecStart` to run `bun run daemon.ts`, `Restart=always`, `WantedBy=default.target`
-- [ ] 7.6 Create launchd plist for Mac listener (`com.agkhalil.agent-notify-listener.plist`): same pattern as daemon, installed only when role is "main"
-- [ ] 7.7 Add platform-specific service installation to install script: detect OS, write appropriate service file, load/enable/start services
-- [ ] 7.8 Add machine role detection to install script: read from `config.toml`, install listener only if role is "main"
-- [ ] 7.9 Add post-install validation: check daemon is running, check listener is running (if main), verify Telegram bot token works, report status
+- [x] 7.1 Add interactive Telegram setup to install script: prompt for bot token, validate via `getMe`, prompt user to send message, detect chat ID via `getUpdates`, send test message, save to secrets file
+- [x] 7.2 Add ntfy topic auto-generation: generate two random topic strings if not already configured
+- [x] 7.3 Add plugin symlink step: symlink `opencode/plugins/agent-notify.ts` to `~/.config/opencode/plugins/agent-notify.ts`
+- [x] 7.4 Create launchd plist for daemon (`com.agkhalil.agent-notify-daemon.plist`): configure `ProgramArguments` to run `bun run daemon.ts`, `KeepAlive: true`, `RunAtLoad: true`, stdout/stderr to log files
+- [x] 7.5 Create systemd user unit for daemon (`agent-notify-daemon.service`): configure `ExecStart` to run `bun run daemon.ts`, `Restart=always`, `WantedBy=default.target`
+- [x] 7.6 Create launchd plist for Mac listener (`com.agkhalil.agent-notify-listener.plist`): same pattern as daemon, installed only when role is "main"
+- [x] 7.7 Add platform-specific service installation to install script: detect OS, write appropriate service file, load/enable/start services
+- [x] 7.8 Add machine role detection to install script: read from `config.toml`, install listener only if role is "main"
+- [x] 7.9 Add post-install validation: check daemon is running, check listener is running (if main), verify Telegram bot token works, report status
 
 ## 8. Unit tests
 
-- [ ] 8.1 Test SQLite module: create tables, insert/query sessions and events, concurrent writes from multiple connections, WAL mode, stale detection query
-- [ ] 8.2 Test event classifier: given mock message parts, correctly classify idle as `done` vs `question`; given askquestion tool part in `waiting` state, extract question text and options
-- [ ] 8.3 Test callback_data encoder/decoder: encode response with session prefix + option index, decode back, verify all formats fit within 64 bytes, test edge cases (long option index, boundary session IDs)
-- [ ] 8.4 Test Telegram message formatter: given each event type (done, error, question, permission), verify message text includes server label, worktree, summary; verify InlineKeyboardMarkup has correct buttons per type
-- [ ] 8.5 Test escalation timer: timer fires after configured delay; ACK received before delay cancels Telegram send; correct delay values per event type; multiple concurrent timers don't interfere
-- [ ] 8.6 Test config loader: parse valid config.toml, resolve env: references, reject missing required fields, handle missing secrets file gracefully
+- [x] 8.1 Test SQLite module: create tables, insert/query sessions and events, concurrent writes from multiple connections, WAL mode, stale detection query
+- [x] 8.2 Test event classifier: given mock message parts, correctly classify idle as `done` vs `question`; given askquestion tool part in `waiting` state, extract question text and options
+- [x] 8.3 Test callback_data encoder/decoder: encode response with session prefix + option index, decode back, verify all formats fit within 64 bytes, test edge cases (long option index, boundary session IDs)
+- [x] 8.4 Test Telegram message formatter: given each event type (done, error, question, permission), verify message text includes server label, worktree, summary; verify InlineKeyboardMarkup has correct buttons per type
+- [x] 8.5 Test escalation timer: timer fires after configured delay; ACK received before delay cancels Telegram send; correct delay values per event type; multiple concurrent timers don't interfere
+- [x] 8.6 Test config loader: parse valid config.toml, resolve env: references, reject missing required fields, handle missing secrets file gracefully
 
 ## 9. Integration tests with mocks
 
-- [ ] 9.1 Create mock Telegram server: local HTTP server that implements sendMessage (stores messages, returns IDs), editMessageText (updates stored messages), getUpdates (returns queued callbacks), answerCallbackQuery; expose helper `simulateButtonTap(msgId, callbackData)` that queues a callback_query
-- [ ] 9.2 Create mock ntfy server: local HTTP server that implements POST /topic (stores messages), GET /topic/sse (SSE stream of stored messages); expose helper `getMessages(topic)` to inspect received events
-- [ ] 9.3 Create mock OpenCode server: local HTTP server that implements POST /session/:id/prompt (records prompts), POST /session/:id/permissions/:permId (records permission responses); expose helper `getReceivedPrompts(sessionId)` and `getReceivedPermissions(sessionId)`
-- [ ] 9.4 Test daemon event-to-notification flow: insert pending event in SQLite, start daemon with mock Telegram and mock ntfy, verify ntfy receives event JSON, wait for escalation timeout, verify mock Telegram receives sendMessage with correct keyboard
-- [ ] 9.5 Test daemon response routing: insert session and event in SQLite, start daemon with mock Telegram and mock OC server, simulate button tap via mock Telegram, verify mock OC server receives correct prompt on correct port
-- [ ] 9.6 Test daemon permission routing: same as 9.5 but for permission events — simulate Allow/Deny tap, verify mock OC server receives permission response (not prompt)
-- [ ] 9.7 Test daemon free-text routing: insert event in SQLite, send notification via daemon, simulate "Type custom" tap then text reply via mock Telegram, verify mock OC server receives the text as a prompt
-- [ ] 9.8 Test ACK suppresses Telegram: insert event, daemon sends ntfy, mock ntfy sends ACK within timeout, verify mock Telegram does NOT receive sendMessage
-- [ ] 9.9 Test stale session handling: insert session with old `last_seen`, run daemon stale check, verify mock Telegram receives editMessageText marking notification as stale
-- [ ] 9.10 Test TUI-answered detection: insert event with status `responded` in SQLite (simulating plugin update), verify daemon calls editMessageText on mock Telegram to update message to "Answered from terminal"
-- [ ] 9.11 Test dead session routing: insert session pointing to a port with no server, simulate Telegram callback, verify daemon sends error message via mock Telegram ("Agent may have exited")
+- [x] 9.1 Create mock Telegram server: local HTTP server that implements sendMessage (stores messages, returns IDs), editMessageText (updates stored messages), getUpdates (returns queued callbacks), answerCallbackQuery; expose helper `simulateButtonTap(msgId, callbackData)` that queues a callback_query
+- [x] 9.2 Create mock ntfy server: local HTTP server that implements POST /topic (stores messages), GET /topic/sse (SSE stream of stored messages); expose helper `getMessages(topic)` to inspect received events
+- [x] 9.3 Create mock OpenCode server: local HTTP server that implements POST /session/:id/prompt (records prompts), POST /session/:id/permissions/:permId (records permission responses); expose helper `getReceivedPrompts(sessionId)` and `getReceivedPermissions(sessionId)`
+- [x] 9.4 Test daemon event-to-notification flow: insert pending event in SQLite, start daemon with mock Telegram and mock ntfy, verify ntfy receives event JSON, wait for escalation timeout, verify mock Telegram receives sendMessage with correct keyboard
+- [x] 9.5 Test daemon response routing: insert session and event in SQLite, start daemon with mock Telegram and mock OC server, simulate button tap via mock Telegram, verify mock OC server receives correct prompt on correct port
+- [x] 9.6 Test daemon permission routing: same as 9.5 but for permission events — simulate Allow/Deny tap, verify mock OC server receives permission response (not prompt)
+- [x] 9.7 Test daemon free-text routing: insert event in SQLite, send notification via daemon, simulate "Type custom" tap then text reply via mock Telegram, verify mock OC server receives the text as a prompt
+- [x] 9.8 Test ACK suppresses Telegram: insert event, daemon sends ntfy, mock ntfy sends ACK within timeout, verify mock Telegram does NOT receive sendMessage
+- [x] 9.9 Test stale session handling: insert session with old `last_seen`, run daemon stale check, verify mock Telegram receives editMessageText marking notification as stale
+- [x] 9.10 Test TUI-answered detection: insert event with status `responded` in SQLite (simulating plugin update), verify daemon calls editMessageText on mock Telegram to update message to "Answered from terminal"
+- [x] 9.11 Test dead session routing: insert session pointing to a port with no server, simulate Telegram callback, verify daemon sends error message via mock Telegram ("Agent may have exited")
 
 ## 10. Manual smoke tests
 
