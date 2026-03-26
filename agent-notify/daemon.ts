@@ -103,7 +103,8 @@ async function startAckListener(): Promise<void> {
 
   const connect = async () => {
     try {
-      const res = await fetch(url);
+      const controller = new AbortController();
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok || !res.body) {
         throw new Error(`ntfy ACK SSE: ${res.status}`);
       }

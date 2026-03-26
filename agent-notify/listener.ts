@@ -100,7 +100,10 @@ async function subscribe(): Promise<void> {
     console.log(`[listener] Connecting to ${url}`);
 
     try {
-      const res = await fetch(url);
+      // Use AbortController with no timeout — SSE connections are long-lived.
+      // Bun's default fetch timeout kills the connection after ~77s.
+      const controller = new AbortController();
+      const res = await fetch(url, { signal: controller.signal });
       if (!res.ok || !res.body) {
         throw new Error(`ntfy SSE: ${res.status}`);
       }
