@@ -11,3 +11,13 @@ __git_branch() {
   git branch 2>/dev/null | sed -n 's/^\* //p'
 }
 export PS1='\[\033[35m\]$(__git_branch)\[\033[m\] \[\033[33m\]\W\[\033[m\] $ '
+
+# --- Fix Anthropic OAuth plugin to use a fixed port (for SSH port forwarding) ---
+_patch_anthropic_auth_port() {
+  local auth_js="$HOME/.cache/opencode/node_modules/@ex-machina/opencode-anthropic-auth/dist/auth.js"
+  [ -f "$auth_js" ] || return 0
+  grep -q 'server.listen(0,' "$auth_js" 2>/dev/null && \
+    sed -i.bak 's/server\.listen(0,/server.listen(45543,/' "$auth_js" && \
+    rm -f "$auth_js.bak"
+}
+_patch_anthropic_auth_port

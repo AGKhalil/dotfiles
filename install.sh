@@ -312,6 +312,22 @@ setup_opencode_profiles() {
   esac
 }
 
+# ── Anthropic auth plugin: fixed OAuth port ──────────────────────────────────
+
+patch_anthropic_auth_port() {
+  local auth_js="$HOME/.cache/opencode/node_modules/@ex-machina/opencode-anthropic-auth/dist/auth.js"
+  if [ ! -f "$auth_js" ]; then
+    info "Anthropic auth plugin not cached yet — port patch will apply via shell rc on first run"
+    return
+  fi
+  if grep -q 'server\.listen(45543,' "$auth_js" 2>/dev/null; then
+    ok "Anthropic auth plugin already patched to port 45543"
+    return
+  fi
+  sed -i.bak 's/server\.listen(0,/server.listen(45543,/' "$auth_js" && rm -f "$auth_js.bak"
+  ok "Patched Anthropic auth plugin to use fixed port 45543"
+}
+
 # ── OpenCode symlinks ────────────────────────────────────────────────────────
 
 setup_opencode_symlinks() {
@@ -523,6 +539,7 @@ main() {
   info "Setting up OpenCode with profile: $profile"
   setup_opencode_profiles "$profile"
   setup_opencode_symlinks
+  patch_anthropic_auth_port
   setup_worktrunk_symlinks
   setup_agent_notify
 
