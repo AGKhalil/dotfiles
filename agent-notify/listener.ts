@@ -10,7 +10,7 @@
  */
 
 import { loadConfig } from "./src/config";
-import { openDB, insertEvent, upsertSession, getEvent } from "./src/db";
+import { openDB, insertEvent, upsertSession, getEvent, updateEventStatus } from "./src/db";
 import type { NtfyEventPayload, NtfyAckPayload, NtfyDismissPayload, EventType } from "./src/types";
 
 const config = loadConfig();
@@ -47,14 +47,15 @@ async function showNotification(
   }
 }
 
-async function dismissNotification(group: string): Promise<void> {
+async function dismissNotification(eventId: string): Promise<void> {
+  // Remove all terminal-notifier notifications (per-group removal is unreliable)
   try {
     const proc = Bun.spawn(
-      ["terminal-notifier", "-remove", group],
+      ["terminal-notifier", "-remove", "ALL"],
       { stdout: "ignore", stderr: "ignore" }
     );
     await proc.exited;
-    console.log(`[listener] Dismissed notification group ${group}`);
+    console.log(`[listener] Dismissed notifications for event ${eventId}`);
   } catch (err) {
     console.error("[listener] Failed to dismiss notification:", err);
   }
@@ -132,6 +133,13 @@ async function subscribe(): Promise<void> {
             // Handle dismiss messages
             if (parsed.dismiss && parsed.event_id) {
               await dismissNotification(parsed.event_id);
+              // Update local DB so ctrl+n panel clears the event
+              try {
+                const evt = getEvent(db, parsed.event_id);
+                if (evt) {
+                  updateEventStatus(db, parsed.event_id, "dismissed");
+                }
+              } catch { /* best effort */ }
               continue;
             }
             const eventPayload: NtfyEventPayload = parsed;

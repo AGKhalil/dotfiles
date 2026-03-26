@@ -205,15 +205,22 @@ export const AgentNotifyPlugin: Plugin = async ({
 
   /** Mark all pending events for a session as responded and dismiss notifications. */
   function markRespondedAndDismiss(sessionId: string) {
-    // Dismiss all terminal-notifier notifications
-    dismissNotifications();
+    // Dismiss notifications directly if terminal-notifier is available (Mac),
+    // otherwise mark as responded so the daemon sends dismiss via ntfy.
+    const canDismissLocally = await checkTerminalNotifier();
+    if (canDismissLocally) {
+      dismissNotifications();
+    }
     sessionEventIds.delete(sessionId);
 
-    // Mark DB events as dismissed so ctrl+n panel clears them too
+    // On Mac: mark dismissed directly (ctrl+n panel clears them).
+    // On server: mark responded so daemon picks them up, sends dismiss
+    // via ntfy to Mac listener, then moves to dismissed.
+    const targetStatus = canDismissLocally ? "dismissed" : "responded";
     try {
       const pending = getPendingEventsForSession(db, sessionId);
       for (const evt of pending) {
-        updateEventStatus(db, evt.id, "dismissed");
+        updateEventStatus(db, evt.id, targetStatus);
       }
     } catch {
       // best effort
