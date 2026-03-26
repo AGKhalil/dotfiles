@@ -69,10 +69,7 @@ function resolveValue(
   if (val.startsWith("env:")) {
     const key = val.slice(4);
     const resolved = secrets[key] ?? process.env[key];
-    if (!resolved) {
-      throw new Error(`Could not resolve env reference: ${val}`);
-    }
-    return resolved;
+    return resolved ?? "";
   }
   return val;
 }
@@ -98,8 +95,10 @@ export function loadConfig(
   const botToken = resolveValue(tg.bot_token, secrets);
   const chatId = resolveValue(tg.chat_id, secrets);
 
-  if (!botToken) throw new Error("telegram.bot_token is required");
-  if (!chatId) throw new Error("telegram.chat_id is required");
+  if (role === "server") {
+    if (!botToken) throw new Error("telegram.bot_token is required");
+    if (!chatId) throw new Error("telegram.chat_id is required");
+  }
 
   const ntfySec = toml["ntfy"] ?? {};
   const eventsTopic = resolveValue(ntfySec.events_topic, secrets);

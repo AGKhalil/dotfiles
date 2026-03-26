@@ -743,8 +743,9 @@ agent_notify_install_services() {
   local current_path="$PATH"
 
   if [ "$role" = "main" ]; then
-    # Main machine: listener only — no daemon, no Telegram
+    # Main machine: daemon (ntfy only, no Telegram) + listener
     if [ "$os" = "darwin" ]; then
+      agent_notify_install_launchd_daemon "$bun_path" "$current_path"
       agent_notify_install_launchd_listener "$bun_path" "$current_path"
     fi
   else
@@ -850,8 +851,14 @@ agent_notify_validate() {
   fi
 
   if [ "$role" = "main" ]; then
-    # Main: listener only
+    # Main: daemon (ntfy only) + listener
     if [ "$os" = "darwin" ]; then
+      if launchctl list 2>/dev/null | grep -q "agent-notify-daemon"; then
+        ok "Daemon running (launchd)"
+      else
+        warn "Daemon not detected in launchctl"
+        all_ok=false
+      fi
       if launchctl list 2>/dev/null | grep -q "agent-notify-listener"; then
         ok "Listener running (launchd)"
       else

@@ -51,8 +51,10 @@ import type { Database } from "bun:sqlite";
 const config = loadConfig();
 const db = openDB();
 
+const hasTelegram = !!(config.telegram.bot_token && config.telegram.chat_id);
+
 console.log(`[daemon] Starting agent-notify daemon (${config.server_label})`);
-console.log(`[daemon] Role: ${config.role}`);
+console.log(`[daemon] Role: ${config.role}, Telegram: ${hasTelegram ? "yes" : "no"}`);
 
 // ── Escalation state ────────────────────────────────────────────────────────
 
@@ -172,13 +174,15 @@ async function processEvent(event: EventRow): Promise<void> {
   };
   await sendNtfy(ntfyPayload);
 
-  // 2. Start escalation timer
-  const delay = getDelay(event.type as EventType);
-  const timer = setTimeout(() => {
-    escalationTimers.delete(event.id);
-    sendTelegramNotification(event, session, payload);
-  }, delay);
-  escalationTimers.set(event.id, timer);
+  // 2. If Telegram is configured, start escalation timer; otherwise done
+  if (hasTelegram) {
+    const delay = getDelay(event.type as EventType);
+    const timer = setTimeout(() => {
+      escalationTimers.delete(event.id);
+      sendTelegramNotification(event, session, payload);
+    }, delay);
+    escalationTimers.set(event.id, timer);
+  }
 }
 
 function summarizeEvent(type: EventType, payload: any): string {
@@ -616,4 +620,8 @@ function sleep(ms: number): Promise<void> {
 
 startAckListener();
 pollEvents();
-pollTelegram();
+if (hasTelegram) {
+  pollTelegram();
+} else {
+  console.log("[daemon] No Telegram configured — skipping Telegram polling");
+}
