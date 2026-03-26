@@ -163,7 +163,7 @@ run_panel() {
   local count=${#DISPLAY_LINES[@]}
   if [ "$count" -eq 0 ]; then
     printf "\n  ${DIM}No notifications${RESET}\n\n"
-    printf "  ${DIM}q to close${RESET}\n"
+    printf "  ${DIM}ctrl+n to close${RESET}\n"
     # Wait for any key
     local saved_tty
     saved_tty=$(stty -g </dev/tty 2>/dev/null)
@@ -183,7 +183,7 @@ run_panel() {
   _draw() {
     printf "\n"
     printf "  ${BOLD}Notifications${RESET}  ${DIM}(%d)${RESET}\n" "$count"
-    printf "  ${DIM}j/k navigate  space dismiss  q close${RESET}\n\n"
+    printf "  ${DIM}j/k navigate  space dismiss  ctrl+n close${RESET}\n\n"
     for i in "${!DISPLAY_LINES[@]}"; do
       if [[ $i -eq $cur ]]; then
         printf "  ${CYAN}>${RESET} %b\n" "${DISPLAY_LINES[$i]}"
@@ -231,7 +231,8 @@ run_panel() {
           break
         fi
         ;;
-      q|Q)
+      $'\x0e')
+        # Ctrl+n — close
         break
         ;;
       k)
