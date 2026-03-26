@@ -130,18 +130,18 @@ async function subscribe(): Promise<void> {
 async function handleEvent(event: NtfyEventPayload): Promise<void> {
   console.log(`[listener] Event received: ${event.type} (${event.event_id})`);
 
-  const title = config.role === "main"
-    ? `main — ${event.project}`
-    : `${event.server_label} — ${event.project}`;
+  const title = config.role === "main" ? "main" : event.server_label;
 
   const hasWorktree = event.worktree
     && event.worktree !== event.project
     && event.worktree !== "unknown";
-  const subtitle = hasWorktree ? event.worktree : "";
 
-  const body = formatEvent(event.type, event.summary);
+  const bodyLines = [event.project];
+  if (hasWorktree) bodyLines.push(event.worktree);
+  bodyLines.push(formatEvent(event.type, event.summary));
+  const body = bodyLines.join("\n");
 
-  await showNotification(title, subtitle, body);
+  await showNotification(title, "", body);
   await sendAck(event.event_id);
 }
 
