@@ -21,27 +21,35 @@ console.log(`[listener] Subscribing to ${config.ntfy.events_topic}`);
 
 async function showNotification(
   title: string,
+  subtitle: string,
   body: string
 ): Promise<void> {
   try {
-    const escaped = (s: string) =>
+    const esc = (s: string) =>
       s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    await $`osascript -e ${"display notification \"" + escaped(body) + "\" with title \"" + escaped(title) + "\""}`;
+    const parts = [
+      `display notification "${esc(body)}"`,
+      `with title "${esc(title)}"`,
+    ];
+    if (subtitle) {
+      parts.push(`subtitle "${esc(subtitle)}"`);
+    }
+    await $`osascript -e ${parts.join(" ")}`;
   } catch (err) {
     console.error("[listener] Failed to show notification:", err);
   }
 }
 
-function formatBody(type: EventType, summary: string): string {
+function formatEvent(type: EventType, summary: string): string {
   switch (type) {
     case "done":
-      return "Agent finished";
+      return `Done: ${summary}`;
     case "error":
-      return `Agent error: ${summary}`;
+      return `Error: ${summary}`;
     case "question":
-      return `Agent asking: ${summary}`;
+      return `Question: ${summary}`;
     case "permission":
-      return `Permission requested: ${summary}`;
+      return `Permission: ${summary}`;
   }
 }
 
@@ -122,10 +130,16 @@ async function subscribe(): Promise<void> {
 async function handleEvent(event: NtfyEventPayload): Promise<void> {
   console.log(`[listener] Event received: ${event.type} (${event.event_id})`);
 
-  const title = `${event.worktree} (${event.server_label})`;
-  const body = formatBody(event.type, event.summary);
+  const title = `${config.role} (${event.server_label})`;
 
-  await showNotification(title, body);
+  const hasWorktree = event.worktree && event.worktree !== event.project && event.worktree !== "unknown";
+  const subtitle = hasWorktree
+    ? `${event.project} / ${event.worktree}`
+    : event.project;
+
+  const body = formatEvent(event.type, event.summary);
+
+  await showNotification(title, subtitle, body);
   await sendAck(event.event_id);
 }
 
