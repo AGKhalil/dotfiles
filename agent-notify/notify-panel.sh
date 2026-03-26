@@ -102,10 +102,22 @@ extract_summary() {
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 declare -a EVENT_IDS=()
+declare -a EVENT_TYPES=()
+declare -a EVENT_STATUSES=()
+declare -a EVENT_PAYLOADS=()
+declare -a EVENT_TIMES=()
+declare -a EVENT_PROJECTS=()
+declare -a EVENT_WORKTREES=()
 declare -a DISPLAY_LINES=()
 
 refresh() {
   EVENT_IDS=()
+  EVENT_TYPES=()
+  EVENT_STATUSES=()
+  EVENT_PAYLOADS=()
+  EVENT_TIMES=()
+  EVENT_PROJECTS=()
+  EVENT_WORKTREES=()
   DISPLAY_LINES=()
 
   local raw
@@ -117,6 +129,13 @@ refresh() {
 
   while IFS='|' read -r eid etype estatus epayload ecreated eproject eworktree; do
     EVENT_IDS+=("$eid")
+    EVENT_TYPES+=("$etype")
+    EVENT_STATUSES+=("$estatus")
+    EVENT_PAYLOADS+=("$epayload")
+    EVENT_TIMES+=("$ecreated")
+    EVENT_PROJECTS+=("$eproject")
+    EVENT_WORKTREES+=("$eworktree")
+
     local proj
     proj=$(basename_of "$eproject")
     local wt
@@ -156,6 +175,107 @@ refresh() {
 dismiss_event() {
   local eid="$1"
   sqlite3 "$DB" "DELETE FROM events WHERE id = '$eid'" 2>/dev/null
+}
+
+# ── Detail view ──────────────────────────────────────────────────────────────
+
+show_detail() {
+  local idx="$1"
+  local etype="${EVENT_TYPES[$idx]}"
+  local estatus="${EVENT_STATUSES[$idx]}"
+  local epayload="${EVENT_PAYLOADS[$idx]}"
+  local ecreated="${EVENT_TIMES[$idx]}"
+  local eproject="${EVENT_PROJECTS[$idx]}"
+  local eworktree="${EVENT_WORKTREES[$idx]}"
+  local eid="${EVENT_IDS[$idx]}"
+
+  local proj
+  proj=$(basename_of "$eproject")
+  local wt
+  wt=$(basename_of "$eworktree")
+  local ago
+  ago=$(time_ago "$ecreated")
+  local summary
+  summary=$(extract_summary "$etype" "$epayload")
+
+  local server_label
+  server_label=$(echo "$epayload" | grep -o '"server_label":"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+
+  local ts
+  if command -v gdate &>/dev/null; then
+    ts=$(gdate -d "@$ecreated" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || date -r "$ecreated" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$ecreated")
+  else
+    ts=$(date -r "$ecreated" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || date -d "@$ecreated" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$ecreated")
+  fi
+
+  printf "\033[2J\033[H"  # clear screen
+  printf "\n"
+  printf "  ${BOLD}Event Detail${RESET}\n"
+  printf "  ${DIM}q/Esc to go back${RESET}\n\n"
+  printf "  ${BOLD}Type:${RESET}      %b\n" "$(type_icon "$etype")"
+  printf "  ${BOLD}Status:${RESET}    %b\n" "$(status_label "$estatus")"
+  printf "  ${BOLD}Project:${RESET}   %s\n" "$proj"
+  [ "$wt" != "$proj" ] && [ "$wt" != "unknown" ] && \
+  printf "  ${BOLD}Worktree:${RESET}  %s\n" "$wt"
+  [ -n "$server_label" ] && \
+  printf "  ${BOLD}Server:${RESET}    %s\n" "$server_label"
+  printf "  ${BOLD}Time:${RESET}      %s (%s)\n" "$ts" "$ago"
+  printf "  ${BOLD}ID:${RESET}        ${DIM}%s${RESET}\n" "$eid"
+  printf "\n"
+  printf "  ${BOLD}Summary:${RESET}\n"
+  printf "  %s\n" "$summary"
+
+  # Show full payload details based on type
+  case "$etype" in
+    error)
+      local msg
+      msg=$(echo "$epayload" | { grep -o '"message":"[^"]*"' || true; } | head -1 | cut -d'"' -f4)
+      if [ -n "$msg" ]; then
+        printf "\n  ${BOLD}Error:${RESET}\n"
+        printf "  ${RED}%s${RESET}\n" "$msg"
+      fi
+      ;;
+    question)
+      local text options
+      text=$(echo "$epayload" | { grep -o '"text":"[^"]*"' || true; } | head -1 | cut -d'"' -f4)
+      if [ -n "$text" ]; then
+        printf "\n  ${BOLD}Question:${RESET}\n"
+        printf "  ${YELLOW}%s${RESET}\n" "$text"
+      fi
+      ;;
+    permission)
+      local tool action
+      tool=$(echo "$epayload" | { grep -o '"tool":"[^"]*"' || true; } | head -1 | cut -d'"' -f4)
+      action=$(echo "$epayload" | { grep -o '"action":"[^"]*"' || true; } | head -1 | cut -d'"' -f4)
+      if [ -n "$tool" ]; then
+        printf "\n  ${BOLD}Tool:${RESET}      %s\n" "$tool"
+      fi
+      if [ -n "$action" ]; then
+        printf "\n  ${BOLD}Action:${RESET}\n"
+        printf "  ${MAGENTA}%s${RESET}\n" "$action"
+      fi
+      ;;
+  esac
+
+  printf "\n"
+
+  # Wait for q/Esc to go back
+  while true; do
+    local dkey
+    dkey=$(dd bs=1 count=1 2>/dev/null </dev/tty)
+    case "$dkey" in
+      q) return ;;
+      $'\x1b')
+        local s1
+        s1=$(dd bs=1 count=1 2>/dev/null </dev/tty)
+        if [[ "$s1" != "[" ]]; then
+          return  # bare Esc
+        fi
+        dd bs=1 count=1 2>/dev/null </dev/tty >/dev/null  # consume seq char
+        ;;
+      $'\x0e') return ;;  # ctrl+n
+    esac
+  done
 }
 
 # ── Interactive loop ─────────────────────────────────────────────────────────
@@ -205,7 +325,7 @@ run_panel() {
       printf "  ${DIM}[%d-%d]${RESET}" "$((scroll + 1))" "$end"
     fi
     printf "\n"
-    printf "  ${DIM}j/k navigate  space dismiss  ctrl+n close${RESET}\n\n"
+    printf "  ${DIM}j/k navigate  enter detail  space dismiss  ctrl+n close${RESET}\n\n"
 
     for (( i=scroll; i<end; i++ )); do
       if [[ $i -eq $cur ]]; then
@@ -279,7 +399,12 @@ run_panel() {
         continue
         ;;
       ""|$'\n')
-        # Enter — no-op for now
+        # Enter — show detail view
+        _clear
+        show_detail "$cur"
+        printf "\033[2J\033[H"  # clear screen after returning
+        _draw
+        continue
         ;;
     esac
 
