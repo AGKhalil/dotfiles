@@ -137,20 +137,16 @@ refresh() {
     fi
 
     # Truncate summary
-    if [ ${#summary} -gt 50 ]; then
-      summary="${summary:0:47}..."
+    if [ ${#summary} -gt 30 ]; then
+      summary="${summary:0:27}..."
     fi
 
     local line
-    line=$(printf "%-20b  %-12b  %b  ${DIM}%s${RESET}" \
+    line=$(printf "%-18b %-10b ${DIM}%-8s${RESET} %b" \
       "$location" \
       "$(type_icon "$etype")" \
-      "$(status_label "$estatus")" \
-      "$ago")
-
-    if [ -n "$summary" ]; then
-      line="$line\n                      ${DIM}${summary}${RESET}"
-    fi
+      "$ago" \
+      "${DIM}${summary}${RESET}")
 
     DISPLAY_LINES+=("$line")
   done <<< "$raw"
@@ -222,17 +218,8 @@ run_panel() {
   _clear() {
     local end=$((scroll + max_visible))
     [[ $end -gt $count ]] && end=$count
-
-    # 4 = blank + header + help + blank
-    local total_lines=4
-    for (( i=scroll; i<end; i++ )); do
-      total_lines=$((total_lines + 1))
-      local nl_count
-      nl_count=$(printf '%b' "${DISPLAY_LINES[$i]}" | grep -c '^' || true)
-      if [ "$nl_count" -gt 1 ]; then
-        total_lines=$((total_lines + nl_count - 1))
-      fi
-    done
+    # 4 = blank + header + help + blank, plus one line per visible item
+    local total_lines=$(( 4 + end - scroll ))
     for (( i=0; i<total_lines; i++ )); do
       printf "\033[A\033[2K"
     done
