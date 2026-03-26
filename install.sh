@@ -298,12 +298,10 @@ setup_opencode_profiles() {
       fi
       ;;
     work)
-      create_wrapper "opencode" "work" "$HOME/.local/share/opencode-work"
-      # Remove work wrapper if it exists (single profile uses 'opencode' name)
-      if [ -f "$HOME/.local/bin/opencode-work" ]; then
-        rm "$HOME/.local/bin/opencode-work"
-        ok "Removed opencode-work wrapper (single work profile uses 'opencode')"
-      fi
+      create_wrapper "opencode-work" "work" "$HOME/.local/share/opencode-work"
+      # Symlink opencode -> opencode-work for convenience (single profile)
+      ln -sf "$HOME/.local/bin/opencode-work" "$HOME/.local/bin/opencode"
+      ok "Symlinked opencode -> opencode-work"
       ;;
     both)
       create_wrapper "opencode" "personal" "$HOME/.local/share/opencode-personal"
@@ -546,6 +544,13 @@ uninstall_profile() {
   if [ -n "$wrapper" ] && [ -f "$HOME/.local/bin/$wrapper" ]; then
     rm "$HOME/.local/bin/$wrapper"
     ok "Removed ~/.local/bin/$wrapper"
+  fi
+
+  # Remove convenience symlink if it points to the removed wrapper
+  if [ -L "$HOME/.local/bin/opencode" ] && \
+     [ "$(readlink "$HOME/.local/bin/opencode")" = "$HOME/.local/bin/$wrapper" ]; then
+    rm "$HOME/.local/bin/opencode"
+    ok "Removed opencode symlink"
   fi
 
   if [ -d "$data_dir" ]; then
