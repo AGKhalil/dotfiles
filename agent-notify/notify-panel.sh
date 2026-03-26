@@ -17,9 +17,10 @@ RESET="\033[0m"
 
 # ── Source colors (main=blue, servers cycle green/yellow/magenta/cyan/red) ──
 
-declare -A SOURCE_COLOR_MAP=()
-declare -a SERVER_COLORS=("$GREEN" "$YELLOW" "$MAGENTA" "$CYAN" "$RED")
-SERVER_COLOR_IDX=0
+_SOURCE_NAMES=""
+_SOURCE_COLORS=""
+_SERVER_PALETTE="$GREEN|$YELLOW|$MAGENTA|$CYAN|$RED"
+_SERVER_IDX=0
 
 source_color() {
   local src="$1"
@@ -27,13 +28,33 @@ source_color() {
     printf '%b' "$BLUE"
     return
   fi
-  if [ -n "${SOURCE_COLOR_MAP[$src]+x}" ]; then
-    printf '%b' "${SOURCE_COLOR_MAP[$src]}"
-    return
-  fi
-  SOURCE_COLOR_MAP[$src]="${SERVER_COLORS[$SERVER_COLOR_IDX]}"
-  SERVER_COLOR_IDX=$(( (SERVER_COLOR_IDX + 1) % ${#SERVER_COLORS[@]} ))
-  printf '%b' "${SOURCE_COLOR_MAP[$src]}"
+  # Check if already assigned
+  local IFS_OLD="$IFS"
+  IFS=$'\n'
+  local i=0
+  for name in $_SOURCE_NAMES; do
+    if [ "$name" = "$src" ]; then
+      local c=0
+      for color in $_SOURCE_COLORS; do
+        if [ $c -eq $i ]; then
+          IFS="$IFS_OLD"
+          printf '%b' "$color"
+          return
+        fi
+        c=$((c + 1))
+      done
+    fi
+    i=$((i + 1))
+  done
+  IFS="$IFS_OLD"
+  # Assign next color from palette
+  local palette_arr
+  IFS='|' read -ra palette_arr <<< "$_SERVER_PALETTE"
+  local color="${palette_arr[$_SERVER_IDX]}"
+  _SERVER_IDX=$(( (_SERVER_IDX + 1) % ${#palette_arr[@]} ))
+  _SOURCE_NAMES="${_SOURCE_NAMES}${_SOURCE_NAMES:+$'\n'}${src}"
+  _SOURCE_COLORS="${_SOURCE_COLORS}${_SOURCE_COLORS:+$'\n'}${color}"
+  printf '%b' "$color"
 }
 
 if [ ! -f "$DB" ]; then
