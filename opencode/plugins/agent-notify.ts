@@ -343,15 +343,15 @@ export const AgentNotifyPlugin: Plugin = async ({
           break;
         }
 
-        // ── Session status change (detect user resumed) ───────────────
+        // ── Session status change (detect user activity) ──────────────
         case "session.status": {
           if (!sessionId) break;
           const status = event?.properties?.status?.type ?? event?.properties?.status;
-          if (status === "busy") {
-            if (sessionsWithPendingEvents.has(sessionId)) {
-              markRespondedAndDismiss(sessionId);
-              sessionsWithPendingEvents.delete(sessionId);
-            }
+          // Any non-idle status means the session is active — user responded
+          // to a prompt, granted permission, or sent a new message.
+          if (status !== "idle" && sessionsWithPendingEvents.has(sessionId)) {
+            markRespondedAndDismiss(sessionId);
+            sessionsWithPendingEvents.delete(sessionId);
           }
           break;
         }
