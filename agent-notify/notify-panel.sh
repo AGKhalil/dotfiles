@@ -25,7 +25,8 @@ fi
 load_events() {
   sqlite3 -separator '|' "$DB" "
     SELECT e.id, e.type, e.status, e.payload, e.created_at,
-           COALESCE(s.project, 'unknown'), COALESCE(s.worktree, 'unknown')
+           COALESCE(s.project, 'unknown'), COALESCE(s.worktree, 'unknown'),
+           e.session_id
     FROM events e
     LEFT JOIN sessions s ON e.session_id = s.id
     WHERE e.status NOT IN ('dismissed', 'stale', 'responded')
@@ -108,6 +109,7 @@ declare -a EVENT_PAYLOADS=()
 declare -a EVENT_TIMES=()
 declare -a EVENT_PROJECTS=()
 declare -a EVENT_WORKTREES=()
+declare -a EVENT_SESSIONS=()
 declare -a DISPLAY_LINES=()
 
 refresh() {
@@ -118,6 +120,7 @@ refresh() {
   EVENT_TIMES=()
   EVENT_PROJECTS=()
   EVENT_WORKTREES=()
+  EVENT_SESSIONS=()
   DISPLAY_LINES=()
 
   local raw
@@ -127,7 +130,7 @@ refresh() {
     return
   fi
 
-  while IFS='|' read -r eid etype estatus epayload ecreated eproject eworktree; do
+  while IFS='|' read -r eid etype estatus epayload ecreated eproject eworktree esession; do
     EVENT_IDS+=("$eid")
     EVENT_TYPES+=("$etype")
     EVENT_STATUSES+=("$estatus")
@@ -135,6 +138,7 @@ refresh() {
     EVENT_TIMES+=("$ecreated")
     EVENT_PROJECTS+=("$eproject")
     EVENT_WORKTREES+=("$eworktree")
+    EVENT_SESSIONS+=("$esession")
 
     local proj
     proj=$(basename_of "$eproject")
@@ -188,6 +192,7 @@ show_detail() {
   local eproject="${EVENT_PROJECTS[$idx]}"
   local eworktree="${EVENT_WORKTREES[$idx]}"
   local eid="${EVENT_IDS[$idx]}"
+  local esession="${EVENT_SESSIONS[$idx]}"
 
   local proj
   proj=$(basename_of "$eproject")
@@ -211,7 +216,7 @@ show_detail() {
   printf "\033[2J\033[H"  # clear screen
   printf "\n"
   printf "  ${BOLD}Event Detail${RESET}\n"
-  printf "  ${DIM}q/Esc to go back${RESET}\n\n"
+  printf "  ${DIM}enter/q/Esc to go back${RESET}\n\n"
   printf "  ${BOLD}Type:${RESET}      %b\n" "$(type_icon "$etype")"
   printf "  ${BOLD}Status:${RESET}    %b\n" "$(status_label "$estatus")"
   printf "  ${BOLD}Project:${RESET}   %s\n" "$proj"
@@ -220,6 +225,8 @@ show_detail() {
   [ -n "$server_label" ] && \
   printf "  ${BOLD}Server:${RESET}    %s\n" "$server_label"
   printf "  ${BOLD}Time:${RESET}      %s (%s)\n" "$ts" "$ago"
+  [ -n "$esession" ] && \
+  printf "  ${BOLD}Session:${RESET}   ${DIM}%s${RESET}\n" "$esession"
   printf "  ${BOLD}ID:${RESET}        ${DIM}%s${RESET}\n" "$eid"
   printf "\n"
   printf "  ${BOLD}Summary:${RESET}\n"
@@ -264,7 +271,7 @@ show_detail() {
     local dkey
     dkey=$(dd bs=1 count=1 2>/dev/null </dev/tty)
     case "$dkey" in
-      q) return ;;
+      q|""|$'\n') return ;;  # q, Enter, or newline
       $'\x1b')
         local s1
         s1=$(dd bs=1 count=1 2>/dev/null </dev/tty)
