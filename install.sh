@@ -10,6 +10,92 @@ ok()    { printf "\033[1;32m[ok]\033[0m    %s\n" "$1"; }
 warn()  { printf "\033[1;33m[warn]\033[0m  %s\n" "$1"; }
 err()   { printf "\033[1;31m[err]\033[0m   %s\n" "$1"; }
 
+CYAN="\033[1;36m"
+RESET="\033[0m"
+
+# Interactive arrow-key selector (adapted from beam).
+# Reads options from stdin, renders a navigable list to stderr,
+# prints the 0-based index of the selected item to stdout.
+# Returns 1 on cancel (Esc / q).
+arrow_select() {
+  declare -a items
+  while IFS= read -r line; do
+    items+=("$line")
+  done
+
+  local count=${#items[@]}
+  [[ $count -eq 0 ]] && return 1
+
+  local cur=0
+
+  printf "\033[?25l" >&2
+  local saved_tty
+  saved_tty=$(stty -g </dev/tty 2>/dev/null)
+  stty -echo -icanon min 1 </dev/tty 2>/dev/null
+
+  _arrow_draw() {
+    for i in "${!items[@]}"; do
+      if [[ $i -eq $cur ]]; then
+        printf "  ${CYAN}>${RESET} %b\n" "${items[$i]}" >&2
+      else
+        printf "    %b\n" "${items[$i]}" >&2
+      fi
+    done
+  }
+
+  _arrow_clear() {
+    for (( i=0; i<count; i++ )); do
+      printf "\033[A\033[2K" >&2
+    done
+  }
+
+  echo "" >&2
+  _arrow_draw
+
+  while true; do
+    local key
+    key=$(dd bs=1 count=1 2>/dev/null </dev/tty)
+
+    case "$key" in
+      $'\x1b')
+        local seq1 seq2
+        seq1=$(dd bs=1 count=1 2>/dev/null </dev/tty)
+        seq2=$(dd bs=1 count=1 2>/dev/null </dev/tty)
+        if [[ "$seq1" == "[" ]]; then
+          case "$seq2" in
+            A) [[ $cur -gt 0 ]] && cur=$((cur - 1)) ;;
+            B) [[ $cur -lt $((count - 1)) ]] && cur=$((cur + 1)) ;;
+          esac
+        else
+          _arrow_clear
+          stty "$saved_tty" </dev/tty 2>/dev/null
+          printf "\033[?25h" >&2
+          return 1
+        fi
+        ;;
+      ""|$'\n')
+        _arrow_clear
+        printf "  ${CYAN}>${RESET} %b\n" "${items[$cur]}" >&2
+        stty "$saved_tty" </dev/tty 2>/dev/null
+        printf "\033[?25h" >&2
+        echo "$cur"
+        return 0
+        ;;
+      q|Q)
+        _arrow_clear
+        stty "$saved_tty" </dev/tty 2>/dev/null
+        printf "\033[?25h" >&2
+        return 1
+        ;;
+      k) [[ $cur -gt 0 ]] && cur=$((cur - 1)) ;;
+      j) [[ $cur -lt $((count - 1)) ]] && cur=$((cur + 1)) ;;
+    esac
+
+    _arrow_clear
+    _arrow_draw
+  done
+}
+
 link_it() {
   local src="$1" dst="$2"
   if [ -L "$dst" ]; then
@@ -115,6 +201,16 @@ setup_worktrunk_symlinks() {
 
 # ── OpenCode profile setup ───────────────────────────────────────────────────
 
+has_personal_profile() {
+  [ -f "$HOME/.local/bin/opencode" ] && grep -q "opencode-personal" "$HOME/.local/bin/opencode" 2>/dev/null
+}
+
+has_work_profile() {
+  # Work can be the default wrapper or a separate opencode-work wrapper
+  { [ -f "$HOME/.local/bin/opencode" ] && grep -q "opencode-work" "$HOME/.local/bin/opencode" 2>/dev/null; } ||
+  { [ -f "$HOME/.local/bin/opencode-work" ] && grep -q "opencode-work" "$HOME/.local/bin/opencode-work" 2>/dev/null; }
+}
+
 prompt_opencode_profile() {
   # Allow non-interactive override via OPENCODE_PROFILE env var
   if [ -n "${OPENCODE_PROFILE:-}" ]; then
@@ -122,25 +218,56 @@ prompt_opencode_profile() {
     return
   fi
 
-  # All interactive output goes to stderr so command substitution doesn't eat it
+  local has_personal=false has_work=false
+  has_personal_profile && has_personal=true
+  has_work_profile && has_work=true
+
+  # Both already installed — nothing to do
+  if $has_personal && $has_work; then
+    ok "OpenCode profiles already installed (personal + work)" >&2
+    echo "both"
+    return
+  fi
+
+  # Build options list based on what's missing
+  declare -a labels=()
+  declare -a values=()
+
+  if $has_personal; then
+    ok "Personal profile already installed" >&2
+    # Only offer: work, both
+    labels+=("work      — add work profile")
+    values+=("work")
+    labels+=("both      — personal (default) + work")
+    values+=("both")
+  elif $has_work; then
+    ok "Work profile already installed" >&2
+    # Only offer: personal, both
+    labels+=("personal  — add personal profile")
+    values+=("personal")
+    labels+=("both      — personal (default) + work")
+    values+=("both")
+  else
+    # Neither installed — offer all three
+    labels+=("personal  — single personal profile")
+    values+=("personal")
+    labels+=("work      — single work profile")
+    values+=("work")
+    labels+=("both      — personal (default) + work")
+    values+=("both")
+  fi
+
   echo >&2
   info "OpenCode profile setup" >&2
-  echo "  1) personal  — single personal profile" >&2
-  echo "  2) work      — single work profile" >&2
-  echo "  3) both      — personal (default) + work" >&2
-  echo >&2
-  printf "  Choose [1/2/3]: " >&2
-  read -r choice
 
-  case "$choice" in
-    1) echo "personal" ;;
-    2) echo "work" ;;
-    3) echo "both" ;;
-    *)
-      warn "Invalid choice '$choice' — defaulting to 'personal'" >&2
-      echo "personal"
-      ;;
-  esac
+  local idx
+  idx=$(printf '%s\n' "${labels[@]}" | arrow_select) || {
+    warn "Cancelled — defaulting to 'personal'" >&2
+    echo "personal"
+    return
+  }
+
+  echo "${values[$idx]}"
 }
 
 create_wrapper() {
@@ -397,10 +524,367 @@ main() {
   setup_opencode_profiles "$profile"
   setup_opencode_symlinks
   setup_worktrunk_symlinks
+  setup_agent_notify
 
   echo
   ok "All done! Restart your shell or run: source ~/.bashrc"
   info "Run 'wt config shell install' once to enable shell integration (cd on switch)."
+}
+
+# ── agent-notify ─────────────────────────────────────────────────────────────
+
+AN_DIR="$DOTFILES_DIR/agent-notify"
+AN_SECRETS="$HOME/.config/agent-notify/secrets"
+AN_LOG_DIR="$HOME/.local/share/agent-notify/logs"
+
+setup_agent_notify() {
+  info "Setting up agent-notify..."
+
+  # Ensure directories
+  mkdir -p "$HOME/.config/agent-notify"
+  mkdir -p "$AN_LOG_DIR"
+  mkdir -p "$HOME/.local/share/agent-notify"
+
+  # Plugin symlink
+  agent_notify_plugin_symlink
+
+  # Telegram setup (interactive, first-time only)
+  agent_notify_telegram_setup
+
+  # ntfy topic auto-generation
+  agent_notify_ntfy_setup
+
+  # Read role from config
+  local role
+  role="$(agent_notify_read_role)"
+
+  # Service installation
+  agent_notify_install_services "$role"
+
+  # Post-install validation
+  agent_notify_validate "$role"
+}
+
+agent_notify_plugin_symlink() {
+  link_it "$AN_DIR/../opencode/plugins/agent-notify.ts" \
+          "$HOME/.config/opencode/plugins/agent-notify.ts"
+}
+
+agent_notify_read_role() {
+  local config="$AN_DIR/config.toml"
+  local role=""
+
+  if [ -f "$config" ]; then
+    role="$(grep -E '^role\s*=' "$config" | sed 's/.*=\s*"\?\([^"]*\)"\?.*/\1/' | head -1)"
+  fi
+
+  # If role is set and valid, use it
+  if [ "$role" = "main" ] || [ "$role" = "server" ]; then
+    echo "$role"
+    return
+  fi
+
+  # Not set or invalid — prompt interactively
+  echo
+  info "Machine role"
+  echo "  This determines whether the Mac listener (for native notifications)" >&2
+  echo "  is installed alongside the daemon." >&2
+
+  local idx
+  idx=$(printf '%s\n' "main    — Mac with native notifications + daemon" "server  — daemon only (remote server)" | arrow_select) || {
+    warn "Cancelled — defaulting to 'server'"
+    echo "server"
+    return
+  }
+
+  if [ "$idx" = "0" ]; then
+    role="main"
+  else
+    role="server"
+  fi
+
+  # Write role back to config.toml (uncomment if needed, or update in place)
+  if [ -f "$config" ]; then
+    if grep -qE '^role\s*=' "$config"; then
+      sed -i.bak "s/^role\s*=.*/role = \"$role\"/" "$config" && rm -f "$config.bak"
+    elif grep -qE '^#\s*role\s*=' "$config"; then
+      sed -i.bak "s/^#\s*role\s*=.*/role = \"$role\"/" "$config" && rm -f "$config.bak"
+    else
+      # Insert after the comment about role
+      sed -i.bak "/Machine role/a\\
+role = \"$role\"" "$config" && rm -f "$config.bak"
+    fi
+  fi
+
+  echo "$role"
+}
+
+# ── Telegram interactive setup ───────────────────────────────────────────────
+
+agent_notify_telegram_setup() {
+  if [ -f "$AN_SECRETS" ] && grep -q "AGENT_NOTIFY_BOT_TOKEN=." "$AN_SECRETS" 2>/dev/null; then
+    ok "Telegram already configured"
+    return
+  fi
+
+  echo
+  info "Telegram bot setup"
+  echo "  Create a bot via @BotFather on Telegram, then paste the token below."
+  echo
+
+  local token=""
+  while true; do
+    printf "  Bot token: "
+    read -r token
+    if [ -z "$token" ]; then
+      warn "Token cannot be empty"
+      continue
+    fi
+
+    # Validate via getMe
+    local me_result
+    me_result="$(curl -s "https://api.telegram.org/bot${token}/getMe")"
+    if echo "$me_result" | grep -q '"ok":true'; then
+      local bot_name
+      bot_name="$(echo "$me_result" | grep -o '"username":"[^"]*"' | head -1 | cut -d'"' -f4)"
+      ok "Bot @${bot_name} found"
+      break
+    else
+      err "Invalid token. Try again."
+    fi
+  done
+
+  # Detect chat ID
+  echo
+  info "Now send any message to @${bot_name:-your bot} on Telegram, then press Enter."
+  printf "  Press Enter after sending a message..."
+  read -r
+
+  local chat_id=""
+  local attempts=0
+  while [ -z "$chat_id" ] && [ "$attempts" -lt 3 ]; do
+    local updates
+    updates="$(curl -s "https://api.telegram.org/bot${token}/getUpdates")"
+    chat_id="$(echo "$updates" | grep -o '"chat":{"id":[0-9-]*' | head -1 | grep -o '[0-9-]*$')"
+    if [ -z "$chat_id" ]; then
+      attempts=$((attempts + 1))
+      if [ "$attempts" -lt 3 ]; then
+        warn "No message found. Make sure you sent a message to the bot. Press Enter to retry..."
+        read -r
+      fi
+    fi
+  done
+
+  if [ -z "$chat_id" ]; then
+    err "Could not detect chat ID. You can set it manually in $AN_SECRETS"
+    chat_id="CHANGE_ME"
+  else
+    ok "Chat ID detected: $chat_id"
+
+    # Send test message
+    curl -s -X POST "https://api.telegram.org/bot${token}/sendMessage" \
+      -H "Content-Type: application/json" \
+      -d "{\"chat_id\":\"${chat_id}\",\"text\":\"agent-notify setup complete!\"}" >/dev/null
+    ok "Test message sent to Telegram"
+  fi
+
+  # Write secrets
+  cat > "$AN_SECRETS" <<EOF
+AGENT_NOTIFY_BOT_TOKEN=${token}
+AGENT_NOTIFY_CHAT_ID=${chat_id}
+EOF
+
+  # Preserve existing ntfy topics if present
+  if [ -f "$AN_SECRETS.bak" ]; then
+    grep "AGENT_NOTIFY_NTFY" "$AN_SECRETS.bak" >> "$AN_SECRETS" 2>/dev/null || true
+    rm -f "$AN_SECRETS.bak"
+  fi
+
+  chmod 600 "$AN_SECRETS"
+  ok "Secrets saved to $AN_SECRETS"
+}
+
+# ── ntfy topic auto-generation ───────────────────────────────────────────────
+
+agent_notify_ntfy_setup() {
+  if [ -f "$AN_SECRETS" ] && grep -q "AGENT_NOTIFY_NTFY_EVENTS=." "$AN_SECRETS" 2>/dev/null; then
+    ok "ntfy topics already configured"
+    return
+  fi
+
+  local events_topic="an-$(openssl rand -hex 12)"
+  local ack_topic="an-ack-$(openssl rand -hex 12)"
+
+  # Append to secrets (don't overwrite Telegram values)
+  {
+    echo "AGENT_NOTIFY_NTFY_EVENTS=${events_topic}"
+    echo "AGENT_NOTIFY_NTFY_ACK=${ack_topic}"
+  } >> "$AN_SECRETS"
+
+  chmod 600 "$AN_SECRETS"
+  ok "ntfy topics generated: ${events_topic}, ${ack_topic}"
+}
+
+# ── Service installation ─────────────────────────────────────────────────────
+
+agent_notify_install_services() {
+  local role="$1"
+  local os
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+  local bun_path
+  bun_path="$(command -v bun 2>/dev/null || echo "$HOME/.bun/bin/bun")"
+  local current_path="$PATH"
+
+  if [ "$os" = "darwin" ]; then
+    agent_notify_install_launchd_daemon "$bun_path" "$current_path"
+    if [ "$role" = "main" ]; then
+      agent_notify_install_launchd_listener "$bun_path" "$current_path"
+    fi
+  elif [ "$os" = "linux" ]; then
+    agent_notify_install_systemd_daemon "$bun_path" "$current_path"
+  fi
+}
+
+agent_notify_install_launchd_daemon() {
+  local bun_path="$1" current_path="$2"
+  local plist_src="$AN_DIR/com.agkhalil.agent-notify-daemon.plist"
+  local plist_dst="$HOME/Library/LaunchAgents/com.agkhalil.agent-notify-daemon.plist"
+  local label="com.agkhalil.agent-notify-daemon"
+
+  mkdir -p "$HOME/Library/LaunchAgents"
+
+  # Unload if already loaded
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+
+  # Generate plist from template
+  sed \
+    -e "s|__BUN_PATH__|${bun_path}|g" \
+    -e "s|__DAEMON_PATH__|${AN_DIR}/daemon.ts|g" \
+    -e "s|__LOG_DIR__|${AN_LOG_DIR}|g" \
+    -e "s|__HOME__|${HOME}|g" \
+    -e "s|__PATH__|${current_path}|g" \
+    "$plist_src" > "$plist_dst"
+
+  launchctl bootstrap "gui/$(id -u)" "$plist_dst"
+  ok "Daemon launchd service installed and started"
+}
+
+agent_notify_install_launchd_listener() {
+  local bun_path="$1" current_path="$2"
+  local plist_src="$AN_DIR/com.agkhalil.agent-notify-listener.plist"
+  local plist_dst="$HOME/Library/LaunchAgents/com.agkhalil.agent-notify-listener.plist"
+  local label="com.agkhalil.agent-notify-listener"
+
+  mkdir -p "$HOME/Library/LaunchAgents"
+
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+
+  sed \
+    -e "s|__BUN_PATH__|${bun_path}|g" \
+    -e "s|__LISTENER_PATH__|${AN_DIR}/listener.ts|g" \
+    -e "s|__LOG_DIR__|${AN_LOG_DIR}|g" \
+    -e "s|__HOME__|${HOME}|g" \
+    -e "s|__PATH__|${current_path}|g" \
+    "$plist_src" > "$plist_dst"
+
+  launchctl bootstrap "gui/$(id -u)" "$plist_dst"
+  ok "Listener launchd service installed and started"
+}
+
+agent_notify_install_systemd_daemon() {
+  local bun_path="$1" current_path="$2"
+  local unit_src="$AN_DIR/agent-notify-daemon.service"
+  local unit_dst="$HOME/.config/systemd/user/agent-notify-daemon.service"
+
+  mkdir -p "$HOME/.config/systemd/user"
+
+  sed \
+    -e "s|__BUN_PATH__|${bun_path}|g" \
+    -e "s|__DAEMON_PATH__|${AN_DIR}/daemon.ts|g" \
+    -e "s|__HOME__|${HOME}|g" \
+    -e "s|__PATH__|${current_path}|g" \
+    "$unit_src" > "$unit_dst"
+
+  systemctl --user daemon-reload
+  systemctl --user enable --now agent-notify-daemon
+  ok "Daemon systemd service installed and started"
+}
+
+# ── Post-install validation ──────────────────────────────────────────────────
+
+agent_notify_validate() {
+  local role="$1"
+  local os
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  local all_ok=true
+
+  echo
+  info "Validating agent-notify installation..."
+
+  # Check plugin symlink
+  if [ -L "$HOME/.config/opencode/plugins/agent-notify.ts" ]; then
+    ok "Plugin symlinked"
+  else
+    err "Plugin symlink missing"
+    all_ok=false
+  fi
+
+  # Check secrets
+  if [ -f "$AN_SECRETS" ] && grep -q "AGENT_NOTIFY_BOT_TOKEN=." "$AN_SECRETS"; then
+    ok "Secrets configured"
+  else
+    err "Secrets not configured"
+    all_ok=false
+  fi
+
+  # Check daemon
+  if [ "$os" = "darwin" ]; then
+    if launchctl list 2>/dev/null | grep -q "agent-notify-daemon"; then
+      ok "Daemon running (launchd)"
+    else
+      warn "Daemon not detected in launchctl"
+      all_ok=false
+    fi
+  elif [ "$os" = "linux" ]; then
+    if systemctl --user is-active agent-notify-daemon >/dev/null 2>&1; then
+      ok "Daemon running (systemd)"
+    else
+      warn "Daemon not active"
+      all_ok=false
+    fi
+  fi
+
+  # Check listener (main only)
+  if [ "$role" = "main" ] && [ "$os" = "darwin" ]; then
+    if launchctl list 2>/dev/null | grep -q "agent-notify-listener"; then
+      ok "Listener running (launchd)"
+    else
+      warn "Listener not detected in launchctl"
+      all_ok=false
+    fi
+  fi
+
+  # Validate bot token
+  local token
+  token="$(grep 'AGENT_NOTIFY_BOT_TOKEN=' "$AN_SECRETS" 2>/dev/null | cut -d'=' -f2)"
+  if [ -n "$token" ] && [ "$token" != "CHANGE_ME" ]; then
+    local me_result
+    me_result="$(curl -s "https://api.telegram.org/bot${token}/getMe" 2>/dev/null)"
+    if echo "$me_result" | grep -q '"ok":true'; then
+      ok "Telegram bot token valid"
+    else
+      warn "Telegram bot token invalid"
+      all_ok=false
+    fi
+  fi
+
+  echo
+  if [ "$all_ok" = true ]; then
+    ok "agent-notify validation passed"
+  else
+    warn "Some checks failed — see above"
+  fi
 }
 
 main "$@"

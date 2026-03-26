@@ -1,0 +1,26 @@
+# agent-notify configuration
+# Secrets (bot_token, chat_id, topics) use env: references resolved from
+# ~/.config/agent-notify/secrets which is NOT tracked by git.
+
+# Machine role: "main" (Mac with listener) or "server" (daemon only)
+# Set by the install script on first run.
+# role = "main"
+
+# Label shown in Telegram messages to identify this machine
+# server_label = "my-server"
+
+[telegram]
+bot_token = "env:AGENT_NOTIFY_BOT_TOKEN"
+chat_id   = "env:AGENT_NOTIFY_CHAT_ID"
+
+[ntfy]
+events_topic = "env:AGENT_NOTIFY_NTFY_EVENTS"
+ack_topic    = "env:AGENT_NOTIFY_NTFY_ACK"
+# server     = "https://ntfy.sh"  # or self-hosted URL
+
+[delays]
+# Seconds to wait for Mac ACK before escalating to Telegram
+question   = 30
+permission = 30
+error      = 60
+done       = 120

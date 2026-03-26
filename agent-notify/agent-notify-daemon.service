@@ -1,0 +1,14 @@
+[Unit]
+Description=agent-notify daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=__BUN_PATH__ run __DAEMON_PATH__
+Restart=always
+RestartSec=5
+Environment=HOME=__HOME__
+Environment=PATH=__PATH__
+
+[Install]
+WantedBy=default.target
