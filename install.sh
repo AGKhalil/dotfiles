@@ -596,6 +596,12 @@ agent_notify_read_role() {
   local config="$AN_DIR/config.toml"
   local role=""
 
+  # Seed from example template if config doesn't exist yet
+  if [ ! -f "$config" ] && [ -f "$config.example" ]; then
+    cp "$config.example" "$config"
+    ok "Created config.toml from template"
+  fi
+
   if [ -f "$config" ]; then
     role="$(grep -E '^role[[:space:]]*=' "$config" | sed 's/.*=[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}.*/\1/' | head -1)"
   fi
