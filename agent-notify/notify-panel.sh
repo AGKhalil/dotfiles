@@ -78,18 +78,18 @@ extract_summary() {
   local type="$1" payload="$2"
   case "$type" in
     done)
-      echo "$payload" | grep -o '"summary":"[^"]*"' | head -1 | cut -d'"' -f4
+      echo "$payload" | { grep -o '"summary":"[^"]*"' || true; } | head -1 | cut -d'"' -f4
       ;;
     error)
-      echo "$payload" | grep -o '"message":"[^"]*"' | head -1 | cut -d'"' -f4
+      echo "$payload" | { grep -o '"message":"[^"]*"' || true; } | head -1 | cut -d'"' -f4
       ;;
     question)
-      echo "$payload" | grep -o '"text":"[^"]*"' | head -1 | cut -d'"' -f4
+      echo "$payload" | { grep -o '"text":"[^"]*"' || true; } | head -1 | cut -d'"' -f4
       ;;
     permission)
       local tool action
-      tool=$(echo "$payload" | grep -o '"tool":"[^"]*"' | head -1 | cut -d'"' -f4)
-      action=$(echo "$payload" | grep -o '"action":"[^"]*"' | head -1 | cut -d'"' -f4)
+      tool=$(echo "$payload" | { grep -o '"tool":"[^"]*"' || true; } | head -1 | cut -d'"' -f4)
+      action=$(echo "$payload" | { grep -o '"action":"[^"]*"' || true; } | head -1 | cut -d'"' -f4)
       echo "$tool: $action"
       ;;
     *)
@@ -126,7 +126,7 @@ refresh() {
     summary=$(extract_summary "$etype" "$epayload")
 
     local server_label
-    server_label=$(echo "$epayload" | grep -o '"server_label":"[^"]*"' | head -1 | cut -d'"' -f4)
+    server_label=$(echo "$epayload" | grep -o '"server_label":"[^"]*"' | head -1 | cut -d'"' -f4 || true)
 
     local location="$proj"
     if [ "$wt" != "$proj" ] && [ "$wt" != "unknown" ]; then
