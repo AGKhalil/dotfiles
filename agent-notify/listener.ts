@@ -131,7 +131,7 @@ async function handleEvent(event: NtfyEventPayload): Promise<void> {
   console.log(`[listener] Event received: ${event.type} (${event.event_id})`);
 
   const title = config.role === "main"
-    ? event.project
+    ? `main — ${event.project}`
     : `${event.server_label} — ${event.project}`;
 
   const hasWorktree = event.worktree
