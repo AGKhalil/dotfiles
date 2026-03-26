@@ -498,13 +498,75 @@ uninstall() {
   info "You may want to remove the source line from your shell rc manually."
 }
 
+# ── Uninstall single profile ────────────────────────────────────────────────
+
+uninstall_profile() {
+  local profile="$1"
+
+  if [ "$profile" != "personal" ] && [ "$profile" != "work" ]; then
+    err "Invalid profile: $profile (must be 'personal' or 'work')"
+    exit 1
+  fi
+
+  # Determine which wrapper name this profile uses
+  local wrapper=""
+  if [ "$profile" = "personal" ]; then
+    # Personal always uses the 'opencode' wrapper
+    if [ -f "$HOME/.local/bin/opencode" ] && grep -q "opencode-personal" "$HOME/.local/bin/opencode" 2>/dev/null; then
+      wrapper="opencode"
+    fi
+  else
+    # Work uses 'opencode-work' in dual mode, or 'opencode' in single mode
+    if [ -f "$HOME/.local/bin/opencode-work" ] && grep -q "opencode-work" "$HOME/.local/bin/opencode-work" 2>/dev/null; then
+      wrapper="opencode-work"
+    elif [ -f "$HOME/.local/bin/opencode" ] && grep -q "opencode-work" "$HOME/.local/bin/opencode" 2>/dev/null; then
+      wrapper="opencode"
+    fi
+  fi
+
+  local data_dir="$HOME/.local/share/opencode-$profile"
+
+  echo
+  warn "This will remove the '$profile' OpenCode profile."
+  echo
+  echo "  The following will be REMOVED:"
+  [ -n "$wrapper" ] && echo "    - Wrapper script  (~/.local/bin/$wrapper)"
+  [ -d "$data_dir" ] && echo "    - Data directory  ($data_dir)"
+  echo
+  printf "  Type 'yes' to confirm: "
+  read -r confirm
+
+  if [ "$confirm" != "yes" ]; then
+    info "Cancelled."
+    return
+  fi
+
+  echo
+
+  if [ -n "$wrapper" ] && [ -f "$HOME/.local/bin/$wrapper" ]; then
+    rm "$HOME/.local/bin/$wrapper"
+    ok "Removed ~/.local/bin/$wrapper"
+  fi
+
+  if [ -d "$data_dir" ]; then
+    rm -rf "$data_dir"
+    ok "Removed $data_dir"
+  fi
+
+  echo
+  ok "Profile '$profile' uninstalled."
+  info "Shared components (binary, config, cache) were kept — they may be used by other profiles."
+}
+
 # ── Usage ────────────────────────────────────────────────────────────────────
 
 usage() {
-  echo "Usage: $0 [--uninstall]"
+  echo "Usage: $0 [--uninstall] [--uninstall-profile personal|work]"
   echo
-  echo "  install.sh            Install dotfiles, tools, and OpenCode profiles"
-  echo "  install.sh --uninstall  Remove all dotfile-managed installations"
+  echo "  install.sh                              Install dotfiles, tools, and OpenCode profiles"
+  echo "  install.sh --uninstall                   Remove all dotfile-managed installations"
+  echo "  install.sh --uninstall-profile personal  Remove only the personal OpenCode profile"
+  echo "  install.sh --uninstall-profile work      Remove only the work OpenCode profile"
   echo
   echo "Environment variables:"
   echo "  OPENCODE_PROFILE=personal|work|both  Skip interactive prompt"
@@ -515,6 +577,15 @@ usage() {
 main() {
   if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     usage
+    exit 0
+  fi
+
+  if [ "${1:-}" = "--uninstall-profile" ]; then
+    if [ -z "${2:-}" ]; then
+      err "Missing profile name. Usage: $0 --uninstall-profile personal|work"
+      exit 1
+    fi
+    uninstall_profile "$2"
     exit 0
   fi
 
