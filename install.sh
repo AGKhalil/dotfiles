@@ -579,7 +579,7 @@ agent_notify_read_role() {
   local role=""
 
   if [ -f "$config" ]; then
-    role="$(grep -E '^role\s*=' "$config" | sed 's/.*=\s*"\?\([^"]*\)"\?.*/\1/' | head -1)"
+    role="$(grep -E '^role[[:space:]]*=' "$config" | sed 's/.*=[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}.*/\1/' | head -1)"
   fi
 
   # If role is set and valid, use it
@@ -589,7 +589,7 @@ agent_notify_read_role() {
   fi
 
   # Not set or invalid — prompt interactively
-  echo
+  echo >&2
   info "Machine role"
   echo "  main   = your Mac — native notifications only, no Telegram" >&2
   echo "  server = remote machine — daemon + Telegram for notifications" >&2
@@ -609,14 +609,13 @@ agent_notify_read_role() {
 
   # Write role back to config.toml (uncomment if needed, or update in place)
   if [ -f "$config" ]; then
-    if grep -qE '^role\s*=' "$config"; then
-      sed -i.bak "s/^role\s*=.*/role = \"$role\"/" "$config" && rm -f "$config.bak"
-    elif grep -qE '^#\s*role\s*=' "$config"; then
-      sed -i.bak "s/^#\s*role\s*=.*/role = \"$role\"/" "$config" && rm -f "$config.bak"
+    if grep -qE '^role[[:space:]]*=' "$config"; then
+      sed -i.bak 's/^role[[:space:]]*=.*/role = "'"$role"'"/' "$config" && rm -f "$config.bak"
+    elif grep -qE '^#[[:space:]]*role[[:space:]]*=' "$config"; then
+      sed -i.bak 's/^#[[:space:]]*role[[:space:]]*=.*/role = "'"$role"'"/' "$config" && rm -f "$config.bak"
     else
-      # Insert after the comment about role
-      sed -i.bak "/Machine role/a\\
-role = \"$role\"" "$config" && rm -f "$config.bak"
+      sed -i.bak '/Machine role/a\
+role = "'"$role"'"' "$config" && rm -f "$config.bak"
     fi
   fi
 
