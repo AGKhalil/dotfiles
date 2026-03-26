@@ -28,6 +28,7 @@ load_events() {
            COALESCE(s.project, 'unknown'), COALESCE(s.worktree, 'unknown')
     FROM events e
     LEFT JOIN sessions s ON e.session_id = s.id
+    WHERE e.status NOT IN ('dismissed', 'stale', 'responded')
     ORDER BY e.created_at DESC
     LIMIT 50
   " 2>/dev/null

@@ -3,13 +3,15 @@
  * agent-notify Mac listener — runs on the main machine (macOS).
  *
  * Subscribes to the ntfy events topic via SSE, displays native macOS
- * notifications via osascript, and sends ACKs back so the daemon can
- * suppress or delay Telegram escalation.
+ * notifications via terminal-notifier (with dismissable groups), and
+ * sends ACKs back so the daemon can suppress or delay Telegram escalation.
+ * Also handles dismiss messages to clear notifications when the user
+ * resumes work in the terminal.
  */
 
 import { loadConfig } from "./src/config";
 import { openDB, insertEvent, upsertSession, getEvent } from "./src/db";
-import type { NtfyEventPayload, NtfyAckPayload, EventType } from "./src/types";
+import type { NtfyEventPayload, NtfyAckPayload, NtfyDismissPayload, EventType } from "./src/types";
 
 const config = loadConfig();
 const db = openDB();
@@ -18,27 +20,43 @@ const ntfyBase = config.ntfy.server ?? "https://ntfy.sh";
 console.log("[listener] Starting agent-notify Mac listener");
 console.log(`[listener] Subscribing to ${config.ntfy.events_topic}`);
 
-// ── macOS notification ──────────────────────────────────────────────────────
+// ── macOS notification (terminal-notifier) ──────────────────────────────────
 
 async function showNotification(
   title: string,
   subtitle: string,
-  body: string
+  body: string,
+  group: string
 ): Promise<void> {
   try {
-    const esc = (s: string) =>
-      (s ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-    let script = `display notification "${esc(body)}" with title "${esc(title)}"`;
-    if (subtitle) {
-      script += ` subtitle "${esc(subtitle)}"`;
-    }
-    const proc = Bun.spawn(["osascript", "-e", script], {
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    await proc.exited;
+    const args = [
+      "terminal-notifier",
+      "-title", title,
+      "-message", body,
+      "-group", group,
+    ];
+    if (subtitle) args.push("-subtitle", subtitle);
+    console.log(`[listener] Spawning: ${args.join(" ")}`);
+    const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
+    const exit = await proc.exited;
+    const stdout = await new Response(proc.stdout).text();
+    const stderr = await new Response(proc.stderr).text();
+    console.log(`[listener] terminal-notifier exit=${exit} stdout=${stdout.trim()} stderr=${stderr.trim()}`);
   } catch (err) {
     console.error("[listener] Failed to show notification:", err);
+  }
+}
+
+async function dismissNotification(group: string): Promise<void> {
+  try {
+    const proc = Bun.spawn(
+      ["terminal-notifier", "-remove", group],
+      { stdout: "ignore", stderr: "ignore" }
+    );
+    await proc.exited;
+    console.log(`[listener] Dismissed notification group ${group}`);
+  } catch (err) {
+    console.error("[listener] Failed to dismiss notification:", err);
   }
 }
 
@@ -109,8 +127,14 @@ async function subscribe(): Promise<void> {
             // Skip ntfy control events (open, keepalive)
             if (!ntfyEvent.message) continue;
             const message = ntfyEvent.message;
-            const eventPayload: NtfyEventPayload =
+            const parsed =
               typeof message === "string" ? JSON.parse(message) : message;
+            // Handle dismiss messages
+            if (parsed.dismiss && parsed.event_id) {
+              await dismissNotification(parsed.event_id);
+              continue;
+            }
+            const eventPayload: NtfyEventPayload = parsed;
             // Skip if missing required fields
             if (!eventPayload.event_id || !eventPayload.type) continue;
             await handleEvent(eventPayload);
@@ -176,7 +200,7 @@ async function handleEvent(event: NtfyEventPayload): Promise<void> {
   bodyLines.push(formatEvent(event.type, event.summary));
   const body = bodyLines.join("\n");
 
-  await showNotification(title, "", body);
+  await showNotification(title, "", body, event.event_id);
   await sendAck(event.event_id);
 }
 

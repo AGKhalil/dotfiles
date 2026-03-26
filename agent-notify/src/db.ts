@@ -177,7 +177,7 @@ export function getPendingEventsForSession(
 ): EventRow[] {
   return db
     .prepare(
-      `SELECT * FROM events WHERE session_id = ?1 AND status IN ('pending', 'tg_sent') ORDER BY created_at`
+      `SELECT * FROM events WHERE session_id = ?1 AND status IN ('pending', 'mac_acked', 'tg_sent') ORDER BY created_at`
     )
     .all(sessionId) as EventRow[];
 }
@@ -204,6 +204,15 @@ export function getRespondedEvents(db: Database): EventRow[] {
   return db
     .prepare(
       `SELECT * FROM events WHERE status = 'responded' AND telegram_msg_id IS NOT NULL ORDER BY responded_at`
+    )
+    .all() as EventRow[];
+}
+
+/** All responded events (with or without Telegram), for dismiss notifications. */
+export function getAllRespondedEvents(db: Database): EventRow[] {
+  return db
+    .prepare(
+      `SELECT * FROM events WHERE status = 'responded' ORDER BY responded_at`
     )
     .all() as EventRow[];
 }

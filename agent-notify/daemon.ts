@@ -12,7 +12,7 @@ import {
   openDB,
   getPendingEvents,
   getEventsByStatus,
-  getRespondedEvents,
+  getAllRespondedEvents,
   getEventsForStaleSessions,
   getStaleSessions,
   getSession,
@@ -42,6 +42,7 @@ import type {
   PermissionPayload,
   NtfyEventPayload,
   NtfyAckPayload,
+  NtfyDismissPayload,
   EventType,
 } from "./src/types";
 import type { Database } from "bun:sqlite";
@@ -78,6 +79,19 @@ async function sendNtfy(eventPayload: NtfyEventPayload): Promise<void> {
     });
   } catch (err) {
     console.error("[daemon] Failed to send ntfy:", err);
+  }
+}
+
+async function sendDismissNtfy(eventId: string): Promise<void> {
+  const payload: NtfyDismissPayload = { dismiss: true, event_id: eventId };
+  try {
+    await fetch(`${ntfyBase}/${config.ntfy.events_topic}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    console.error("[daemon] Failed to send dismiss ntfy:", err);
   }
 }
 
@@ -252,33 +266,39 @@ async function pollEvents(): Promise<void> {
 }
 
 async function updateRespondedMessages(): Promise<void> {
-  const responded = getRespondedEvents(db);
+  const responded = getAllRespondedEvents(db);
   for (const event of responded) {
-    if (!event.telegram_msg_id) continue;
-    try {
-      await editMessageText(
-        config.telegram.bot_token,
-        config.telegram.chat_id,
-        event.telegram_msg_id,
-        "Answered from terminal",
-        null // remove keyboard
-      );
-      // Clear the escalation timer if still pending
-      const timer = escalationTimers.get(event.id);
-      if (timer) {
-        clearTimeout(timer);
-        escalationTimers.delete(event.id);
-      }
-    } catch {
-      // Message may already be updated
+    // Dismiss the macOS notification on the listener
+    await sendDismissNtfy(event.id);
+
+    // Cancel escalation timer if still pending
+    const timer = escalationTimers.get(event.id);
+    if (timer) {
+      clearTimeout(timer);
+      escalationTimers.delete(event.id);
     }
-    // Mark as fully handled to avoid re-processing
-    // We update to a terminal state by re-setting responded (already set)
-    // In practice, getRespondedEvents filters by telegram_msg_id IS NOT NULL
-    // so we need to clear the telegram_msg_id or add another status.
-    // For simplicity, set telegram_msg_id to null after updating.
+
+    // Update Telegram message if one was sent
+    if (event.telegram_msg_id) {
+      try {
+        await editMessageText(
+          config.telegram.bot_token,
+          config.telegram.chat_id,
+          event.telegram_msg_id,
+          "Answered from terminal",
+          null // remove keyboard
+        );
+      } catch {
+        // Message may already be updated
+      }
+    }
+
+    // Mark as fully handled — set status to a terminal state so we don't
+    // re-process.  We clear telegram_msg_id and move to 'dismissed'.
     try {
-      db.prepare("UPDATE events SET telegram_msg_id = NULL WHERE id = ?1").run(event.id);
+      db.prepare(
+        "UPDATE events SET status = 'dismissed', telegram_msg_id = NULL WHERE id = ?1"
+      ).run(event.id);
     } catch { /* best effort */ }
   }
 }
@@ -292,6 +312,9 @@ async function handleStaleSessions(): Promise<void> {
 
   for (const event of events) {
     updateEventStatus(db, event.id, "stale");
+
+    // Dismiss the macOS notification on the listener
+    await sendDismissNtfy(event.id);
 
     // Cancel any pending escalation
     const timer = escalationTimers.get(event.id);

@@ -4,6 +4,11 @@
  * Detects idle, error, question, and permission events, writes them to a
  * shared SQLite registry so the per-server daemon can pick them up and
  * route notifications (ntfy → Mac, escalation → Telegram).
+ *
+ * On macOS, the plugin shows notifications directly via terminal-notifier
+ * (works from any tmux pane, including SSH inner sessions on the Mac).
+ * When terminal-notifier is not available (remote server), the daemon
+ * handles notification delivery via ntfy and Telegram.
  */
 
 import type { Plugin } from "@opencode-ai/plugin";
@@ -30,7 +35,6 @@ function uuid(): string {
 /** Best-effort extraction of the OpenCode server port from the SDK client. */
 async function discoverPort(client: any): Promise<number> {
   try {
-    // The SDK client stores the base URL internally.  Try common locations.
     const baseUrl: string | undefined =
       client?.baseUrl ??
       client?.options?.baseUrl ??
@@ -45,15 +49,73 @@ async function discoverPort(client: any): Promise<number> {
     // ignore
   }
 
-  // Fallback: call the health endpoint to discover the port.  If the client
-  // doesn't expose it directly we try the well-known default.
   try {
-    const res = await client.global.health();
-    // The response itself doesn't contain the port, but if we got here the
-    // client is working.  Try to extract from the internal fetch URL.
-    return 4096; // last resort default
+    await client.global.health();
+    return 4096;
   } catch {
     return 4096;
+  }
+}
+
+// ── Direct macOS notifications via terminal-notifier ────────────────────────
+
+let hasTerminalNotifier: boolean | null = null;
+
+async function checkTerminalNotifier(): Promise<boolean> {
+  if (hasTerminalNotifier !== null) return hasTerminalNotifier;
+  try {
+    const proc = Bun.spawn(["which", "terminal-notifier"], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    const code = await proc.exited;
+    hasTerminalNotifier = code === 0;
+  } catch {
+    hasTerminalNotifier = false;
+  }
+  return hasTerminalNotifier;
+}
+
+async function showNotification(
+  title: string,
+  body: string,
+  group: string
+): Promise<void> {
+  if (!(await checkTerminalNotifier())) return;
+  try {
+    const proc = Bun.spawn(
+      ["terminal-notifier", "-title", title, "-message", body, "-group", group],
+      { stdout: "ignore", stderr: "ignore" }
+    );
+    await proc.exited;
+  } catch {
+    // best effort
+  }
+}
+
+async function dismissNotifications(): Promise<void> {
+  if (!(await checkTerminalNotifier())) return;
+  try {
+    const proc = Bun.spawn(
+      ["terminal-notifier", "-remove", "ALL"],
+      { stdout: "ignore", stderr: "ignore" }
+    );
+    await proc.exited;
+  } catch {
+    // best effort
+  }
+}
+
+function formatEventSummary(type: EventType, payload: any): string {
+  switch (type) {
+    case "done":
+      return `Done: ${payload.summary ?? "Session completed"}`;
+    case "error":
+      return `Error: ${payload.message ?? "Agent error"}`;
+    case "question":
+      return `Question: ${payload.text ?? "Agent has a question"}`;
+    case "permission":
+      return `Permission: ${payload.tool}: ${payload.action}`;
   }
 }
 
@@ -66,12 +128,8 @@ export const AgentNotifyPlugin: Plugin = async ({
   directory,
   worktree,
 }) => {
-  // Initialise database
   const db = openDB();
-
-  // Track sessions owned by this plugin instance for heartbeat & cleanup.
   const ownedSessions = new Set<string>();
-
   const port = await discoverPort(client);
 
   const basename = (p: string) => p.split("/").pop() ?? p;
@@ -118,25 +176,44 @@ export const AgentNotifyPlugin: Plugin = async ({
 
   // ── Event helpers ───────────────────────────────────────────────────────
 
+  /** Track event IDs per session so we can dismiss them later. */
+  const sessionEventIds = new Map<string, string[]>();
+
   function writeEvent(sessionId: string, type: EventType, payload: object) {
+    const eventId = uuid();
     try {
       insertEvent(db, {
-        id: uuid(),
+        id: eventId,
         session_id: sessionId,
         type,
         payload: JSON.stringify(payload),
       });
     } catch (err) {
       console.error("[agent-notify] Failed to write event:", err);
+      return;
     }
+
+    // Track event ID for later dismiss
+    const ids = sessionEventIds.get(sessionId) ?? [];
+    ids.push(eventId);
+    sessionEventIds.set(sessionId, ids);
+
+    // Show notification directly via terminal-notifier
+    const body = formatEventSummary(type, payload);
+    showNotification(projectName, body, eventId);
   }
 
-  /** Mark all pending events for a session as responded (TUI-answered). */
-  function markResponded(sessionId: string) {
+  /** Mark all pending events for a session as responded and dismiss notifications. */
+  function markRespondedAndDismiss(sessionId: string) {
+    // Dismiss all terminal-notifier notifications
+    dismissNotifications();
+    sessionEventIds.delete(sessionId);
+
+    // Mark DB events as dismissed so ctrl+n panel clears them too
     try {
       const pending = getPendingEventsForSession(db, sessionId);
       for (const evt of pending) {
-        updateEventStatus(db, evt.id, "responded");
+        updateEventStatus(db, evt.id, "dismissed");
       }
     } catch {
       // best effort
@@ -158,11 +235,9 @@ export const AgentNotifyPlugin: Plugin = async ({
         return;
       }
 
-      // Last assistant message
       const lastMsg = msgs.data[msgs.data.length - 1];
       const parts: any[] = lastMsg?.parts ?? [];
 
-      // Check for askquestion tool part in waiting state
       for (const part of parts) {
         if (
           part?.type === "tool" &&
@@ -178,13 +253,11 @@ export const AgentNotifyPlugin: Plugin = async ({
         }
       }
 
-      // No askquestion → agent finished normally
       const title =
         lastMsg?.info?.title ?? lastMsg?.info?.summary ?? "Session completed";
       writeEvent(sessionId, "done", { summary: title });
       sessionsWithPendingEvents.add(sessionId);
     } catch (err) {
-      // If we can't inspect messages, emit a generic done event
       writeEvent(sessionId, "done", { summary: "Session idle" });
       sessionsWithPendingEvents.add(sessionId);
     }
@@ -199,6 +272,8 @@ export const AgentNotifyPlugin: Plugin = async ({
 
       const sessionId: string =
         event?.properties?.sessionID ??
+        event?.properties?.info?.sessionID ??
+        event?.properties?.part?.sessionID ??
         event?.properties?.id ??
         event?.sessionID ??
         event?.id ??
@@ -261,29 +336,13 @@ export const AgentNotifyPlugin: Plugin = async ({
           break;
         }
 
-        // ── Message updated (detect TUI-answered) ─────────────────────
-        case "message.updated":
-        case "message.part.updated": {
-          if (!sessionId) break;
-          if (sessionsWithPendingEvents.has(sessionId)) {
-            markResponded(sessionId);
-            sessionsWithPendingEvents.delete(sessionId);
-          }
-          break;
-        }
-
-        // ── Session status change (also detect TUI-answered) ──────────
+        // ── Session status change (detect user resumed) ───────────────
         case "session.status": {
           if (!sessionId) break;
-          const status = event?.properties?.status;
-          // If session is running/busy and had pending events, mark responded
-          if (
-            status === "running" ||
-            status === "busy" ||
-            status === "prompting"
-          ) {
+          const status = event?.properties?.status?.type ?? event?.properties?.status;
+          if (status === "busy") {
             if (sessionsWithPendingEvents.has(sessionId)) {
-              markResponded(sessionId);
+              markRespondedAndDismiss(sessionId);
               sessionsWithPendingEvents.delete(sessionId);
             }
           }

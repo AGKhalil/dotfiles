@@ -7,6 +7,7 @@ export type EventStatus =
   | "mac_acked"
   | "tg_sent"
   | "responded"
+  | "dismissed"
   | "stale";
 
 // ── Event Payloads ──────────────────────────────────────────────────────────
@@ -100,5 +101,10 @@ export interface NtfyEventPayload {
 }
 
 export interface NtfyAckPayload {
+  event_id: string;
+}
+
+export interface NtfyDismissPayload {
+  dismiss: true;
   event_id: string;
 }

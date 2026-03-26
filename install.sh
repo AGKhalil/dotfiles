@@ -826,6 +826,23 @@ agent_notify_ntfy_setup() {
   ok "ntfy topics generated: ${events_topic}, ${ack_topic}"
 }
 
+# ── terminal-notifier (dismissable macOS notifications) ──────────────────────
+
+install_terminal_notifier() {
+  if command -v terminal-notifier &>/dev/null; then
+    ok "terminal-notifier already installed"
+    return
+  fi
+
+  if command -v brew &>/dev/null; then
+    info "Installing terminal-notifier via Homebrew..."
+    brew install terminal-notifier
+    ok "terminal-notifier installed"
+  else
+    warn "Homebrew not found — install terminal-notifier manually: brew install terminal-notifier"
+  fi
+}
+
 # ── Service installation ─────────────────────────────────────────────────────
 
 agent_notify_install_services() {
@@ -840,6 +857,7 @@ agent_notify_install_services() {
   if [ "$role" = "main" ]; then
     # Main machine: daemon (ntfy only, no Telegram) + listener
     if [ "$os" = "darwin" ]; then
+      install_terminal_notifier
       agent_notify_install_launchd_daemon "$bun_path" "$current_path"
       agent_notify_install_launchd_listener "$bun_path" "$current_path"
     fi
