@@ -160,23 +160,21 @@ refresh() {
 
     local server_label
     server_label=$(echo "$epayload" | grep -o '"server_label":"[^"]*"' | head -1 | cut -d'"' -f4 || true)
+    local source="${server_label:-main}"
 
-    # Use session name (chat title) if available, fall back to project
-    local label="$esname"
-    if [ -z "$label" ]; then
-      label="$proj"
+    # Use session name if available, fall back to project
+    local name="$esname"
+    if [ -z "$name" ]; then
+      name="$proj"
       if [ "$wt" != "$proj" ] && [ "$wt" != "unknown" ]; then
-        label="$proj / $wt"
+        name="$proj / $wt"
       fi
-    fi
-    # Truncate label
-    if [ ${#label} -gt 24 ]; then
-      label="${label:0:21}..."
     fi
 
     local line
-    line=$(printf "%-26s %-10b ${DIM}%-8s${RESET}" \
-      "$label" \
+    line=$(printf "${DIM}[${RESET}%s${DIM}]${RESET} %s  %-10b ${DIM}%-8s${RESET}" \
+      "$source" \
+      "$name" \
       "$(type_icon "$etype")" \
       "$ago")
 
