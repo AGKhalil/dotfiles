@@ -179,6 +179,9 @@ export const AgentNotifyPlugin: Plugin = async ({
   /** Track event IDs per session so we can dismiss them later. */
   const sessionEventIds = new Map<string, string[]>();
 
+  /** Cache session names as they arrive via session.updated. */
+  const sessionNames = new Map<string, string>();
+
   function writeEvent(sessionId: string, type: EventType, payload: object) {
     const eventId = uuid();
     try {
@@ -200,7 +203,8 @@ export const AgentNotifyPlugin: Plugin = async ({
 
     // Show notification directly via terminal-notifier
     const body = formatEventSummary(type, payload);
-    showNotification(projectName, body, eventId);
+    const title = sessionNames.get(sessionId) || projectName;
+    showNotification(title, body, eventId);
   }
 
   /** Mark all pending events for a session as responded and dismiss notifications. */
@@ -362,6 +366,7 @@ export const AgentNotifyPlugin: Plugin = async ({
           const sid = info?.id ?? sessionId;
           const name = info?.title ?? info?.slug ?? "";
           if (sid && name) {
+            sessionNames.set(sid, name);
             try {
               updateSessionName(db, sid, name);
             } catch {

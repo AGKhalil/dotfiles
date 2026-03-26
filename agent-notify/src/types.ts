@@ -99,6 +99,7 @@ export interface NtfyEventPayload {
   worktree: string;
   server_label: string;
   summary: string;
+  session_name?: string;
 }
 
 export interface NtfyAckPayload {

@@ -181,6 +181,7 @@ async function processEvent(event: EventRow): Promise<void> {
     worktree: session?.worktree ?? "unknown",
     server_label: config.server_label,
     summary: summarizeEvent(event.type as EventType, payload),
+    session_name: session?.name || undefined,
   };
   await sendNtfy(ntfyPayload);
 

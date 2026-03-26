@@ -199,17 +199,10 @@ async function handleEvent(event: NtfyEventPayload): Promise<void> {
   }
 
   // Show macOS notification
-  const title = event.server_label === config.server_label
-    ? "main"
-    : event.server_label;
+  const title = event.session_name
+    || (event.server_label === config.server_label ? "main" : event.server_label);
 
-  const hasWorktree = event.worktree
-    && event.worktree !== event.project
-    && event.worktree !== "unknown";
-
-  const bodyLines = [event.project];
-  if (hasWorktree) bodyLines.push(event.worktree);
-  bodyLines.push(formatEvent(event.type, event.summary));
+  const bodyLines = [formatEvent(event.type, event.summary)];
   const body = bodyLines.join("\n");
 
   await showNotification(title, "", body, event.event_id);
