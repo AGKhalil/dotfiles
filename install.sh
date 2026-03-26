@@ -307,6 +307,10 @@ _auth_js="$HOME/.cache/opencode/node_modules/@ex-machina/opencode-anthropic-auth
 if [ -f "$_auth_js" ] && grep -q 'server\.listen(0,' "$_auth_js" 2>/dev/null; then
   sed -i.bak 's/server\.listen(0,/server.listen(45543,/' "$_auth_js" && rm -f "$_auth_js.bak"
 fi
+# Restart agent-notify daemon if ntfy tunnel may have reconnected (Linux servers)
+if command -v systemctl &>/dev/null && systemctl --user is-enabled agent-notify-daemon &>/dev/null 2>&1; then
+  systemctl --user restart agent-notify-daemon 2>/dev/null
+fi
 exec ~/.opencode/bin/opencode "$@"
 OUTER
   chmod +x "$wrapper"
