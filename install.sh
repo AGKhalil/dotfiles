@@ -420,6 +420,7 @@ setup_shell() {
 
 setup_symlinks() {
   info "Linking configs..."
+  link_it "$DOTFILES_DIR/tmux/.tmux.conf" "$HOME/.tmux.conf"
   link_it "$DOTFILES_DIR/nvim" "$HOME/.config/nvim"
 
   # Ghostty config only matters on machines running Ghostty (not headless servers)
