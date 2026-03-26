@@ -106,7 +106,7 @@ export const AgentNotifyPlugin: Plugin = async ({
 
   const sessionNames = new Map<string, string>();
   const sessionsWithPendingEvents = new Set<string>();
-  let activeSessionId = "";
+  let currentSessionId = "";
 
   function writeEvent(sessionId: string, type: EventType, payload: object) {
     // Dismiss any existing pending events for this session — only the
@@ -215,6 +215,7 @@ export const AgentNotifyPlugin: Plugin = async ({
       switch (type) {
         case "session.idle": {
           if (!sessionId) break;
+          currentSessionId = sessionId;
           await classifyIdle(sessionId);
           break;
         }
@@ -254,8 +255,8 @@ export const AgentNotifyPlugin: Plugin = async ({
         case "session.status": {
           if (!sessionId) break;
           const status = event?.properties?.status?.type ?? event?.properties?.status;
+          currentSessionId = sessionId;
           if (status !== "idle") {
-            activeSessionId = sessionId;
             if (sessionsWithPendingEvents.has(sessionId)) {
               markResponded(sessionId);
               sessionsWithPendingEvents.delete(sessionId);
@@ -275,8 +276,8 @@ export const AgentNotifyPlugin: Plugin = async ({
             } catch {
               // best effort
             }
-            // Rename tmux window only for the active session
-            if (process.env.TMUX && sid === activeSessionId) {
+            // Rename tmux window only for the current active session
+            if (process.env.TMUX && sid === currentSessionId) {
               try {
                 const truncated = name.length > 30 ? name.slice(0, 27) + "..." : name;
                 Bun.spawn(["tmux", "rename-window", truncated], {
