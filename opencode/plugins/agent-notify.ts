@@ -204,7 +204,7 @@ export const AgentNotifyPlugin: Plugin = async ({
   }
 
   /** Mark all pending events for a session as responded and dismiss notifications. */
-  function markRespondedAndDismiss(sessionId: string) {
+  async function markRespondedAndDismiss(sessionId: string) {
     // Dismiss notifications directly if terminal-notifier is available (Mac),
     // otherwise mark as responded so the daemon sends dismiss via ntfy.
     const canDismissLocally = await checkTerminalNotifier();
