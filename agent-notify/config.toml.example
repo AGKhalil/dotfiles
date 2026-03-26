@@ -20,7 +20,7 @@ server     = "http://localhost:8090"  # self-hosted ntfy (forwarded via SSH on s
 
 [delays]
 # Seconds to wait for Mac ACK before escalating to Telegram
-question   = 30
-permission = 30
-error      = 60
-done       = 120
+question   = 600
+permission = 600
+error      = 600
+done       = 600
