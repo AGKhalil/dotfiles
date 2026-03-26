@@ -179,17 +179,20 @@ async function handleEvent(event: NtfyEventPayload): Promise<void> {
     });
 
     // Skip duplicate events (same event_id from retries)
-    if (!getEvent(db, event.event_id)) {
-      insertEvent(db, {
-        id: event.event_id,
-        session_id: sessionId,
-        type: event.type,
-        payload: JSON.stringify({
-          summary: event.summary,
-          server_label: event.server_label,
-        }),
-      });
+    if (getEvent(db, event.event_id)) {
+      console.log(`[listener] Skipping duplicate event ${event.event_id}`);
+      return;
     }
+
+    insertEvent(db, {
+      id: event.event_id,
+      session_id: sessionId,
+      type: event.type,
+      payload: JSON.stringify({
+        summary: event.summary,
+        server_label: event.server_label,
+      }),
+    });
   } catch (err) {
     console.error("[listener] Failed to write to SQLite:", err);
   }
