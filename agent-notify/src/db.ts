@@ -93,7 +93,7 @@ export function getStaleSessions(
 ): SessionRow[] {
   return db
     .prepare(
-      `SELECT * FROM sessions WHERE last_seen < unixepoch() - ?1`
+      `SELECT * FROM sessions WHERE last_seen < unixepoch() - ?1 AND port != 0`
     )
     .all(thresholdSecs) as SessionRow[];
 }
