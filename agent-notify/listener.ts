@@ -28,34 +28,32 @@ async function showNotification(
   body: string,
   group: string
 ): Promise<void> {
+  // Use osascript for showing — it works reliably from launchd services.
+  // Dismiss is handled by the plugin via terminal-notifier in user context.
   try {
-    const args = [
-      "terminal-notifier",
-      "-title", title,
-      "-message", body,
-      "-group", group,
-    ];
-    if (subtitle) args.push("-subtitle", subtitle);
-    console.log(`[listener] Spawning: ${args.join(" ")}`);
-    const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
-    const exit = await proc.exited;
-    const stdout = await new Response(proc.stdout).text();
-    const stderr = await new Response(proc.stderr).text();
-    console.log(`[listener] terminal-notifier exit=${exit} stdout=${stdout.trim()} stderr=${stderr.trim()}`);
+    const esc = (s: string) =>
+      (s ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+    let script = `display notification "${esc(body)}" with title "${esc(title)}"`;
+    if (subtitle) {
+      script += ` subtitle "${esc(subtitle)}"`;
+    }
+    const proc = Bun.spawn(["osascript", "-e", script], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    await proc.exited;
+    console.log(`[listener] Notification shown: ${title} — ${body}`);
   } catch (err) {
     console.error("[listener] Failed to show notification:", err);
   }
 }
 
 async function dismissNotification(eventId: string): Promise<void> {
-  // Remove all terminal-notifier notifications (per-group removal is unreliable)
+  // osascript notifications can't be programmatically dismissed.
+  // The plugin handles dismiss via terminal-notifier in user context.
+  // Here we just log and update the DB.
   try {
-    const proc = Bun.spawn(
-      ["terminal-notifier", "-remove", "ALL"],
-      { stdout: "ignore", stderr: "ignore" }
-    );
-    await proc.exited;
-    console.log(`[listener] Dismissed notifications for event ${eventId}`);
+    console.log(`[listener] Dismiss received for event ${eventId}`);
   } catch (err) {
     console.error("[listener] Failed to dismiss notification:", err);
   }
