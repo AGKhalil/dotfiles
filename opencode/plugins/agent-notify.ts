@@ -108,6 +108,10 @@ export const AgentNotifyPlugin: Plugin = async ({
   const sessionsWithPendingEvents = new Set<string>();
 
   function writeEvent(sessionId: string, type: EventType, payload: object) {
+    // Dismiss any existing pending events for this session — only the
+    // latest event per session should be visible.
+    markResponded(sessionId);
+
     try {
       insertEvent(db, {
         id: uuid(),
