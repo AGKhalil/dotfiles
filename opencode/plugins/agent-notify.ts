@@ -200,10 +200,9 @@ export const AgentNotifyPlugin: Plugin = async ({
         event?.id ??
         "";
 
-      switch (type) {
-        // ── Session created ───────────────────────────────────────────
-        case "session.created": {
-          if (!sessionId) break;
+      // Ensure session is registered on any event that carries a session ID
+      if (sessionId && !ownedSessions.has(sessionId)) {
+        try {
           upsertSession(db, {
             id: sessionId,
             port,
@@ -211,9 +210,12 @@ export const AgentNotifyPlugin: Plugin = async ({
             worktree: worktreeName,
           });
           ownedSessions.add(sessionId);
-          break;
+        } catch {
+          // best effort
         }
+      }
 
+      switch (type) {
         // ── Session idle (done or question) ───────────────────────────
         case "session.idle": {
           if (!sessionId) break;

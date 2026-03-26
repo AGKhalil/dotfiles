@@ -156,25 +156,20 @@ function getDelay(eventType: EventType): number {
 
 async function processEvent(event: EventRow): Promise<void> {
   const session = getSession(db, event.session_id);
-  if (!session) {
-    console.warn(`[daemon] No session found for event ${event.id}`);
-    return;
-  }
-
   const payload = JSON.parse(event.payload);
 
   // 1. Send ntfy for Mac listener
   const ntfyPayload: NtfyEventPayload = {
     event_id: event.id,
     type: event.type as EventType,
-    project: session.project,
-    worktree: session.worktree,
+    project: session?.project ?? "unknown",
+    worktree: session?.worktree ?? "unknown",
     server_label: config.server_label,
     summary: summarizeEvent(event.type as EventType, payload),
   };
   await sendNtfy(ntfyPayload);
 
-  // 2. If Telegram is configured, start escalation timer; otherwise done
+  // 2. If Telegram is configured, start escalation timer; otherwise mark done
   if (hasTelegram) {
     const delay = getDelay(event.type as EventType);
     const timer = setTimeout(() => {
@@ -182,6 +177,9 @@ async function processEvent(event: EventRow): Promise<void> {
       sendTelegramNotification(event, session, payload);
     }, delay);
     escalationTimers.set(event.id, timer);
+  } else {
+    // No Telegram — ntfy sent, nothing more to do
+    updateEventStatus(db, event.id, "mac_acked");
   }
 }
 
@@ -200,19 +198,19 @@ function summarizeEvent(type: EventType, payload: any): string {
 
 async function sendTelegramNotification(
   event: EventRow,
-  session: SessionRow,
+  session: SessionRow | null,
   payload: any
 ): Promise<void> {
   try {
     const { text } = formatNotification(
       config.server_label,
-      session.worktree,
+      session?.worktree ?? "unknown",
       event.type as EventType,
       payload
     );
     const keyboard = buildKeyboard(
       event.type as EventType,
-      session.id.slice(0, 8),
+      (session?.id ?? event.session_id).slice(0, 8),
       payload
     );
 
