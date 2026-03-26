@@ -82,8 +82,14 @@ export function updateHeartbeat(db: Database, sessionIds: string[]): void {
 export function deleteSessions(db: Database, sessionIds: string[]): void {
   if (sessionIds.length === 0) return;
   const placeholders = sessionIds.map(() => "?").join(",");
+  // Only delete sessions that have no active events (keep session data
+  // intact for events still visible in the notification panel).
   db.prepare(
-    `DELETE FROM sessions WHERE id IN (${placeholders})`
+    `DELETE FROM sessions WHERE id IN (${placeholders})
+     AND id NOT IN (
+       SELECT DISTINCT session_id FROM events
+       WHERE status NOT IN ('dismissed', 'stale')
+     )`
   ).run(...sessionIds);
 }
 
