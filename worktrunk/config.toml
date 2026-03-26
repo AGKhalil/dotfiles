@@ -1,6 +1,9 @@
+skip-commit-generation-prompt = true
 # Worktrunk user config — applies to all repos.
 # Per-project hooks go in <repo>/.config/wt.toml
 
 # Rename tmux window to branch name on every switch
 [post-switch]
 tmux = '[ -n "$TMUX" ] && tmux rename-window {{ branch | sanitize }}'
+
+[projects]
