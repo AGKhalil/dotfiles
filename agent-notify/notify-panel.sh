@@ -125,9 +125,15 @@ refresh() {
     local summary
     summary=$(extract_summary "$etype" "$epayload")
 
+    local server_label
+    server_label=$(echo "$epayload" | grep -o '"server_label":"[^"]*"' | head -1 | cut -d'"' -f4)
+
     local location="$proj"
     if [ "$wt" != "$proj" ] && [ "$wt" != "unknown" ]; then
       location="$proj / $wt"
+    fi
+    if [ -n "$server_label" ]; then
+      location="${server_label}  ${location}"
     fi
 
     # Truncate summary

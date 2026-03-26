@@ -8,10 +8,11 @@
  */
 
 import { loadConfig } from "./src/config";
+import { openDB, insertEvent, upsertSession, getEvent } from "./src/db";
 import type { NtfyEventPayload, NtfyAckPayload, EventType } from "./src/types";
 
-
 const config = loadConfig();
+const db = openDB();
 const ntfyBase = config.ntfy.server ?? "https://ntfy.sh";
 
 console.log("[listener] Starting agent-notify Mac listener");
@@ -134,7 +135,37 @@ async function subscribe(): Promise<void> {
 async function handleEvent(event: NtfyEventPayload): Promise<void> {
   console.log(`[listener] Event received: ${event.type} (${event.event_id})`);
 
-  const title = config.role === "main" ? "main" : event.server_label;
+  // Write to local SQLite for the ctrl+n panel
+  try {
+    // Ensure a session row exists for grouping
+    const sessionId = `${event.server_label}:${event.project}`;
+    upsertSession(db, {
+      id: sessionId,
+      port: 0,
+      project: event.project,
+      worktree: event.worktree,
+    });
+
+    // Skip duplicate events (same event_id from retries)
+    if (!getEvent(db, event.event_id)) {
+      insertEvent(db, {
+        id: event.event_id,
+        session_id: sessionId,
+        type: event.type,
+        payload: JSON.stringify({
+          summary: event.summary,
+          server_label: event.server_label,
+        }),
+      });
+    }
+  } catch (err) {
+    console.error("[listener] Failed to write to SQLite:", err);
+  }
+
+  // Show macOS notification
+  const title = event.server_label === config.server_label
+    ? "main"
+    : event.server_label;
 
   const hasWorktree = event.worktree
     && event.worktree !== event.project
