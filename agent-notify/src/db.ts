@@ -61,7 +61,9 @@ export function upsertSession(
     `INSERT INTO sessions (id, port, project, worktree, name)
      VALUES (?1, ?2, ?3, ?4, ?5)
      ON CONFLICT(id) DO UPDATE SET
-       port = excluded.port,
+       port = CASE WHEN excluded.port != 0 THEN excluded.port ELSE sessions.port END,
+       project = CASE WHEN excluded.project != 'unknown' AND excluded.project != '' THEN excluded.project ELSE sessions.project END,
+       worktree = CASE WHEN excluded.worktree != 'unknown' AND excluded.worktree != '' THEN excluded.worktree ELSE sessions.worktree END,
        name = CASE WHEN excluded.name != '' THEN excluded.name ELSE sessions.name END,
        last_seen = unixepoch()`
   ).run(session.id, session.port, session.project, session.worktree, session.name ?? "");
