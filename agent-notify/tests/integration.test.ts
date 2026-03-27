@@ -88,6 +88,7 @@ describe("Integration: Event-to-notification flow (9.4)", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         event_id: "evt-int-1",
+        session_id: "sess-int-1",
         type: "question",
         project: "proj",
         worktree: "feat",
