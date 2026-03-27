@@ -148,7 +148,7 @@ async function subscribe(): Promise<void> {
             }
             const eventPayload: NtfyEventPayload = parsed;
             // Skip if missing required fields
-            if (!eventPayload.event_id || !eventPayload.type) continue;
+            if (!eventPayload.event_id || !eventPayload.session_id || !eventPayload.type) continue;
             await handleEvent(eventPayload);
           } catch {
             // Skip non-JSON lines (keepalive, etc.)
@@ -180,11 +180,12 @@ async function handleEvent(event: NtfyEventPayload): Promise<void> {
 
   // Write to local SQLite for the ctrl+n panel
   try {
-    // Ensure a session row exists for grouping
-    const sessionId = `${event.server_label}:${event.project}`;
+    // Ensure a session row exists for grouping — use the real session ID
+    // from the daemon so names stay accurate per-session.
+    const sessionId = event.session_id;
     upsertSession(db, {
       id: sessionId,
-      port: 0,
+      port: event.port ?? 0,
       project: event.project,
       worktree: event.worktree,
       name: event.session_name,

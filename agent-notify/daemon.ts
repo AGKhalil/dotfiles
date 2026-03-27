@@ -187,12 +187,14 @@ async function processEvent(event: EventRow): Promise<void> {
   // 1. Send ntfy for Mac listener
   const ntfyPayload: NtfyEventPayload = {
     event_id: event.id,
+    session_id: event.session_id,
     type: event.type as EventType,
     project: session?.project ?? "unknown",
     worktree: session?.worktree ?? "unknown",
     server_label: config.server_label,
     summary: summarizeEvent(event.type as EventType, payload),
     session_name: session?.name || undefined,
+    port: session?.port ?? undefined,
   };
   await sendNtfy(ntfyPayload);
 

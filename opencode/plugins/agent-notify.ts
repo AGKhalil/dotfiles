@@ -205,6 +205,7 @@ export const AgentNotifyPlugin: Plugin = async ({
             port,
             project: projectName,
             worktree: worktreeName,
+            name: sessionNames.get(sessionId) ?? "",
           });
           ownedSessions.add(sessionId);
         } catch {

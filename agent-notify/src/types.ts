@@ -94,12 +94,14 @@ export interface AppConfig {
 
 export interface NtfyEventPayload {
   event_id: string;
+  session_id: string;
   type: EventType;
   project: string;
   worktree: string;
   server_label: string;
   summary: string;
   session_name?: string;
+  port?: number;
 }
 
 export interface NtfyAckPayload {
