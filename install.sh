@@ -429,10 +429,18 @@ OUTER
 export XDG_DATA_HOME="\${HOME}/.local/share/opencode-$profile"
 EOF
   cat >> "$wrapper" <<'OUTER'
-# Fix Anthropic OAuth plugin to use fixed port 45543 (for SSH port forwarding)
+# Fix Anthropic OAuth plugin to use a fixed port on servers (for SSH port forwarding).
+# Local Mac uses the default random port (no patch) to avoid conflicts with tunnels.
+# Each server gets a unique port derived from its hostname (range 45543–46542).
 _auth_js="$HOME/.cache/opencode/node_modules/@ex-machina/opencode-anthropic-auth/dist/auth.js"
-if [ -f "$_auth_js" ] && grep -q 'server\.listen(0,' "$_auth_js" 2>/dev/null; then
-  sed -i.bak 's/server\.listen(0,/server.listen(45543,/' "$_auth_js" && rm -f "$_auth_js.bak"
+if [ -f "$_auth_js" ] && [ "$(uname -s)" = "Linux" ]; then
+  _auth_port=$(( 45543 + $(hostname | cksum | cut -d' ' -f1) % 1000 ))
+  if grep -q 'server\.listen(0,' "$_auth_js" 2>/dev/null; then
+    sed -i.bak "s/server\.listen(0,/server.listen($_auth_port,/" "$_auth_js" && rm -f "$_auth_js.bak"
+  elif grep -q 'server\.listen([0-9]' "$_auth_js" 2>/dev/null; then
+    # Already patched — update to this server's port
+    sed -i.bak "s/server\.listen([0-9]*,/server.listen($_auth_port,/" "$_auth_js" && rm -f "$_auth_js.bak"
+  fi
 fi
 # Restart agent-notify daemon if ntfy tunnel may have reconnected (Linux servers)
 if command -v systemctl &>/dev/null && systemctl --user is-enabled agent-notify-daemon &>/dev/null 2>&1; then
@@ -472,17 +480,28 @@ setup_opencode_profiles() {
 # ── Anthropic auth plugin: fixed OAuth port ──────────────────────────────────
 
 patch_anthropic_auth_port() {
+  # Only patch on servers — local Mac uses the default random port
+  if [ "$(uname -s)" = "Darwin" ]; then
+    ok "Local Mac — skipping auth port patch (uses random port)"
+    return
+  fi
+
   local auth_js="$HOME/.cache/opencode/node_modules/@ex-machina/opencode-anthropic-auth/dist/auth.js"
   if [ ! -f "$auth_js" ]; then
-    info "Anthropic auth plugin not cached yet — port patch will apply via shell rc on first run"
+    info "Anthropic auth plugin not cached yet — port patch will apply via wrapper on first run"
     return
   fi
-  if grep -q 'server\.listen(45543,' "$auth_js" 2>/dev/null; then
-    ok "Anthropic auth plugin already patched to port 45543"
+
+  local auth_port=$(( 45543 + $(hostname | cksum | cut -d' ' -f1) % 1000 ))
+
+  if grep -q "server\.listen(${auth_port}," "$auth_js" 2>/dev/null; then
+    ok "Anthropic auth plugin already patched to port $auth_port"
     return
   fi
-  sed -i.bak 's/server\.listen(0,/server.listen(45543,/' "$auth_js" && rm -f "$auth_js.bak"
-  ok "Patched Anthropic auth plugin to use fixed port 45543"
+
+  # Patch whether it's the default port 0 or a previously patched port
+  sed -i.bak "s/server\.listen([0-9]*,/server.listen(${auth_port},/" "$auth_js" && rm -f "$auth_js.bak"
+  ok "Patched Anthropic auth plugin to use port $auth_port (derived from hostname)"
 }
 
 # ── OpenCode symlinks ────────────────────────────────────────────────────────
