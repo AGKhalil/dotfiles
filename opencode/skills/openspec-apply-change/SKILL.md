@@ -84,6 +84,7 @@ Implement tasks from an OpenSpec change.
    - Make the code changes required
    - Keep changes minimal and focused
    - Mark task complete in the tasks file: `- [ ]` → `- [x]`
+   - **Commit** all changes for this task with a concise message (do NOT batch tasks into one commit)
    - Continue to next task
 
    **Pause if:**
