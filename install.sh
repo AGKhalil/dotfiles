@@ -190,6 +190,101 @@ install_opencode_binary() {
   ok "opencode binary installed"
 }
 
+# ── Tmux (build from source on Linux for 3.5+) ──────────────────────────────
+
+TMUX_REQUIRED_VERSION="3.5"
+
+install_tmux() {
+  local current_version=""
+  if command -v tmux &>/dev/null; then
+    current_version="$(tmux -V | grep -oE '[0-9]+\.[0-9]+[a-z]?' | head -1)"
+  fi
+
+  # Compare major.minor (strip trailing letter)
+  local current_num="${current_version%%[a-z]*}"
+  local required_num="$TMUX_REQUIRED_VERSION"
+
+  if [ -n "$current_num" ]; then
+    local cur_major="${current_num%%.*}"
+    local cur_minor="${current_num##*.}"
+    local req_major="${required_num%%.*}"
+    local req_minor="${required_num##*.}"
+
+    if [ "$cur_major" -gt "$req_major" ] 2>/dev/null ||
+       { [ "$cur_major" -eq "$req_major" ] && [ "$cur_minor" -ge "$req_minor" ]; } 2>/dev/null; then
+      ok "tmux already installed: $current_version (>= $TMUX_REQUIRED_VERSION)"
+      return
+    fi
+  fi
+
+  local os
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+  if [ "$os" = "darwin" ]; then
+    if command -v brew &>/dev/null; then
+      info "Upgrading tmux via Homebrew..."
+      brew install tmux
+      ok "tmux installed: $(tmux -V)"
+    else
+      warn "Homebrew not found — install tmux >= $TMUX_REQUIRED_VERSION manually"
+    fi
+    return
+  fi
+
+  # Linux: build from source into ~/.local (no sudo required)
+  info "Building tmux ${TMUX_REQUIRED_VERSION}a from source (current: ${current_version:-none})..."
+
+  local prefix="$HOME/.local"
+  local tmp
+  tmp="$(mktemp -d)"
+
+  # Build libevent from source if headers are missing
+  if [ ! -f /usr/include/event2/event.h ] && [ ! -f "$prefix/include/event2/event.h" ]; then
+    info "Building libevent (headers not found)..."
+    local le_ver="2.1.12-stable"
+    curl -fsSL "https://github.com/libevent/libevent/releases/download/release-${le_ver}/libevent-${le_ver}.tar.gz" \
+      -o "$tmp/libevent.tar.gz"
+    tar xzf "$tmp/libevent.tar.gz" -C "$tmp"
+    ( cd "$tmp/libevent-${le_ver}" && ./configure --prefix="$prefix" --disable-shared >/dev/null 2>&1 && make -j"$(nproc)" >/dev/null 2>&1 && make install >/dev/null 2>&1 )
+    ok "libevent built into $prefix"
+  fi
+
+  # Provide a yacc stub if bison/yacc is missing — release tarballs
+  # ship pre-generated parser files so yacc is not actually needed.
+  local yacc_stub=""
+  if ! command -v yacc &>/dev/null && ! command -v bison &>/dev/null; then
+    yacc_stub="$tmp/bin/yacc"
+    mkdir -p "$tmp/bin"
+    printf '#!/bin/sh\necho yacc stub\n' > "$yacc_stub"
+    chmod +x "$yacc_stub"
+  fi
+
+  # Build tmux
+  local tarball="tmux-${TMUX_REQUIRED_VERSION}a.tar.gz"
+  local url="https://github.com/tmux/tmux/releases/download/${TMUX_REQUIRED_VERSION}a/${tarball}"
+
+  curl -fsSL "$url" -o "$tmp/$tarball"
+  tar xzf "$tmp/$tarball" -C "$tmp"
+
+  (
+    cd "$tmp/tmux-${TMUX_REQUIRED_VERSION}a"
+    PATH="${tmp}/bin:$PATH" \
+    PKG_CONFIG_PATH="$prefix/lib/pkgconfig:${PKG_CONFIG_PATH:-}" \
+    CFLAGS="-I$prefix/include" LDFLAGS="-L$prefix/lib -Wl,-rpath,$prefix/lib" \
+    ./configure --prefix="$prefix" >/dev/null 2>&1
+    make -j"$(nproc)" >/dev/null 2>&1
+    make install >/dev/null 2>&1
+  )
+
+  rm -rf "$tmp"
+
+  if [ -x "$prefix/bin/tmux" ]; then
+    ok "tmux installed: $("$prefix/bin/tmux" -V)"
+  else
+    err "tmux build failed"
+  fi
+}
+
 # ── Worktrunk ────────────────────────────────────────────────────────────────
 
 install_worktrunk() {
@@ -638,6 +733,7 @@ main() {
   ensure_path
   install_bun
   install_nvim
+  install_tmux
   install_opencode_binary
   install_worktrunk
   setup_shell
