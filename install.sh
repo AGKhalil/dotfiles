@@ -177,6 +177,38 @@ install_nvim() {
   ok "nvim installed to $bin_dir/nvim"
 }
 
+# ── OpenSpec CLI ─────────────────────────────────────────────────────────────
+
+install_openspec() {
+  if command -v openspec &>/dev/null; then
+    ok "openspec already installed: $(openspec --version 2>/dev/null)"
+    return
+  fi
+
+  info "Installing openspec CLI..."
+
+  if command -v npm &>/dev/null; then
+    npm install -g @fission-ai/openspec
+  elif command -v bun &>/dev/null || [ -x "$HOME/.bun/bin/bun" ]; then
+    local bun_cmd="${HOME}/.bun/bin/bun"
+    command -v bun &>/dev/null && bun_cmd="bun"
+    $bun_cmd install -g @fission-ai/openspec
+
+    # openspec uses #!/usr/bin/env node — symlink bun as node if node is missing
+    if ! command -v node &>/dev/null; then
+      local bun_bin
+      bun_bin="$(command -v bun 2>/dev/null || echo "$HOME/.bun/bin/bun")"
+      ln -sf "$bun_bin" "$HOME/.local/bin/node"
+      ok "Symlinked bun as node (for openspec shebang)"
+    fi
+  else
+    warn "Neither npm nor bun found — install openspec manually: npm install -g @fission-ai/openspec"
+    return
+  fi
+
+  ok "openspec installed"
+}
+
 # ── OpenCode ─────────────────────────────────────────────────────────────────
 
 install_opencode_binary() {
@@ -735,6 +767,7 @@ main() {
   install_nvim
   install_tmux
   install_opencode_binary
+  install_openspec
   install_worktrunk
   setup_shell
   setup_symlinks
