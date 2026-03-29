@@ -216,9 +216,11 @@ export function formatNotification(
   serverLabel: string,
   worktree: string,
   eventType: EventType,
-  payload: object
+  payload: object,
+  sessionName?: string
 ): { text: string; keyboard: InlineKeyboard } {
-  const header = `<b>${worktree}</b> (${serverLabel})`;
+  const title = sessionName || worktree;
+  const header = `<b>${title}</b> (${serverLabel})`;
 
   switch (eventType) {
     case "done": {

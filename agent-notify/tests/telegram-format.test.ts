@@ -80,6 +80,23 @@ describe("Telegram message formatter", () => {
     expect(text).toContain("rm -rf /tmp/test");
   });
 
+  test("session name takes precedence over worktree in header", () => {
+    const { text } = formatNotification(serverLabel, worktree, "done", {
+      summary: "Finished",
+    }, "Fix auth bug");
+    expect(text).toContain("Fix auth bug");
+    expect(text).toContain(serverLabel);
+    expect(text).not.toContain(worktree);
+  });
+
+  test("falls back to worktree when session name is absent", () => {
+    const { text } = formatNotification(serverLabel, worktree, "done", {
+      summary: "Finished",
+    });
+    expect(text).toContain(worktree);
+    expect(text).toContain(serverLabel);
+  });
+
   test("permission keyboard has Allow and Deny", () => {
     const keyboard = buildKeyboard("permission", prefix, {
       permissionId: "perm-1",

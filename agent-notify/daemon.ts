@@ -234,7 +234,8 @@ async function sendTelegramNotification(
       config.server_label,
       session?.worktree ?? "unknown",
       event.type as EventType,
-      payload
+      payload,
+      session?.name || undefined
     );
     const keyboard = buildKeyboard(
       event.type as EventType,
