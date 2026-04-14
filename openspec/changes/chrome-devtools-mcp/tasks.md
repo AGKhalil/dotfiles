@@ -1,6 +1,6 @@
 ## 1. Wrapper Script
 
-- [ ] 1.1 Create `chrome-devtools-mcp` wrapper script in `opencode/` dotfiles directory (resolves Chrome path from Puppeteer cache on Linux, falls back to system Chrome on Mac, errors if no Chrome found, execs bunx with --slim --headless --isolated --no-usage-statistics --executable-path)
+- [x] 1.1 Create `chrome-devtools-mcp` wrapper script in `opencode/` dotfiles directory (resolves Chrome path from Puppeteer cache on Linux, falls back to system Chrome on Mac, errors if no Chrome found, execs bunx with --slim --headless --isolated --no-usage-statistics --executable-path)
 - [ ] 1.2 Add `mcp` block to `opencode/opencode.json` with `chrome-devtools` entry using command `["chrome-devtools-mcp"]`
 
 ## 2. Install Script
