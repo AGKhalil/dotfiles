@@ -4,5 +4,10 @@
     "opencode-plugin-openspec",
     "opencode-anthropic-auth",
     "@ex-machina/opencode-anthropic-auth"
-  ]
+  ],
+  "mcp": {
+    "chrome-devtools": {
+      "command": ["chrome-devtools-mcp"]
+    }
+  }
 }
