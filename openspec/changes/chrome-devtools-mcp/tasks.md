@@ -5,9 +5,9 @@
 
 ## 2. Install Script
 
-- [ ] 2.1 Add `install_chrome_for_mcp()` function to `install.sh` -- downloads Chrome via `bunx puppeteer browsers install chrome@stable` on Linux, skips on Mac, idempotent (checks Puppeteer cache first)
-- [ ] 2.2 Add `setup_chrome_devtools_mcp()` function to `install.sh` -- writes wrapper script to `~/.local/bin/chrome-devtools-mcp`, makes it executable
-- [ ] 2.3 Add `validate_chrome_libs()` helper that checks required shared libraries on Linux and warns if any are missing
+- [x] 2.1 Add `install_chrome_for_mcp()` function to `install.sh` -- downloads Chrome via `bunx puppeteer browsers install chrome@stable` on Linux, skips on Mac, idempotent (checks Puppeteer cache first)
+- [x] 2.2 Add `setup_chrome_devtools_mcp()` function to `install.sh` -- writes wrapper script to `~/.local/bin/chrome-devtools-mcp`, makes it executable
+- [x] 2.3 Add `validate_chrome_libs()` helper that checks required shared libraries on Linux and warns if any are missing
 - [ ] 2.4 Wire new functions into `main()` flow in `install.sh` (after `install_bun`, before `setup_opencode_symlinks`)
 
 ## 3. Testing on Linux Server (proteinea-gpu-0)
