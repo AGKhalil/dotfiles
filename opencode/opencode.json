@@ -10,5 +10,14 @@
       "type": "local",
       "command": ["chrome-devtools-mcp"]
     }
+  },
+  "agent": {
+    "build": {
+      "permission": {
+        "external_directory": {
+          "/tmp/chrome-devtools-mcp-*": "allow"
+        }
+      }
+    }
   }
 }
