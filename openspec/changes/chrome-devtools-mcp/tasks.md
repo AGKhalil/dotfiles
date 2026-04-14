@@ -12,7 +12,7 @@
 
 ## 3. Testing on Linux Server (proteinea-gpu-0)
 
-- [ ] 3.1 Snapshot OpenCode state dirs -- `find ~/.local/share/opencode-* ~/.config/opencode/ -type f | sort | xargs md5sum` to capture state before changes
+- [x] 3.1 Snapshot OpenCode state dirs -- `find ~/.local/share/opencode-* ~/.config/opencode/ -type f | sort | xargs md5sum` to capture state before changes
 - [ ] 3.2 Run `install_chrome_for_mcp` and `setup_chrome_devtools_mcp` -- verify Chrome downloaded and wrapper created at `~/.local/bin/chrome-devtools-mcp`
 - [ ] 3.3 Run `install_chrome_for_mcp` again -- verify idempotent (outputs "already installed", no re-download)
 - [ ] 3.4 Re-run the same md5sum snapshot -- diff against 3.1 to verify OpenCode state dirs unchanged
