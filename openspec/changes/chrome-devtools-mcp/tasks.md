@@ -25,5 +25,5 @@
 
 - [x] 4.1 Protocol-level MCP test: same node script as 3.5 but on Mac -- verify wrapper finds system Chrome and all 3 tools work
 - [x] 4.2 OpenCode integration test: `opencode mcp list` shows `chrome-devtools` configured
-- [ ] 4.3 Full agent test: same `opencode run` prompt as 3.7 on Mac
+- [x] 4.3 Full agent test: same `opencode run` prompt as 3.7 on Mac
 - [x] 4.4 Run `install_chrome_for_mcp` on Mac -- verify it skips download and reports system Chrome will be used
