@@ -882,6 +882,7 @@ main() {
 
   ensure_path
   install_bun
+  install_chrome_for_mcp
   install_nvim
   install_tmux
   install_opencode_binary
@@ -889,6 +890,10 @@ main() {
   install_worktrunk
   setup_shell
   setup_symlinks
+
+  # Chrome DevTools MCP wrapper
+  setup_chrome_devtools_mcp
+  validate_chrome_libs
 
   # OpenCode profile selection + config
   local profile
