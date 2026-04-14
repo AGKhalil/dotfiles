@@ -16,7 +16,7 @@
 - [x] 3.2 Run `install_chrome_for_mcp` and `setup_chrome_devtools_mcp` -- verify Chrome downloaded and wrapper created at `~/.local/bin/chrome-devtools-mcp`
 - [x] 3.3 Run `install_chrome_for_mcp` again -- verify idempotent (outputs "already installed", no re-download)
 - [x] 3.4 Re-run the same md5sum snapshot -- diff against 3.1 to verify OpenCode state dirs unchanged
-- [ ] 3.5 Protocol-level MCP test (no LLM needed): write a node script that spawns the wrapper, sends JSON-RPC over stdin (initialize → notifications/initialized → tools/list → tools/call navigate → tools/call screenshot → tools/call evaluate), and asserts: (a) init succeeds, (b) tools/list returns exactly [navigate, evaluate, screenshot], (c) navigate returns success text, (d) screenshot returns image data, (e) evaluate returns expected string
+- [x] 3.5 Protocol-level MCP test (no LLM needed): write a node script that spawns the wrapper, sends JSON-RPC over stdin (initialize → notifications/initialized → tools/list → tools/call navigate → tools/call screenshot → tools/call evaluate), and asserts: (a) init succeeds, (b) tools/list returns exactly [navigate, evaluate, screenshot], (c) navigate returns success text, (d) screenshot returns image data, (e) evaluate returns expected string
 - [ ] 3.6 OpenCode integration test: run `opencode mcp list` and verify `chrome-devtools` appears with status "connected" or "configured"
 - [ ] 3.7 Full agent test: run `opencode run "Use the chrome-devtools navigate tool to go to data:text/html,<h1>test</h1> then take a screenshot"` and verify the session completes with tool calls in output
 - [ ] 3.8 Run `validate_chrome_libs` -- verify passes with no warnings
