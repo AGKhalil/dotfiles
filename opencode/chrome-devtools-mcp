@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Wrapper: resolves Chrome binary and launches Chrome DevTools MCP server.
+# Installed to ~/.local/bin/chrome-devtools-mcp by install.sh.
+set -euo pipefail
+
+CHROME_PATH=""
+
+# Try Puppeteer cache first (Linux)
+for candidate in "$HOME"/.cache/puppeteer/chrome/*/chrome-linux64/chrome; do
+  if [[ -x "$candidate" ]]; then
+    CHROME_PATH="$candidate"
+    break
+  fi
+done
+
+# Mac: let the MCP server find system Chrome (no --executable-path needed)
+if [[ -z "$CHROME_PATH" && "$(uname -s)" == "Darwin" ]]; then
+  if [[ -e "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]]; then
+    exec bunx --bun chrome-devtools-mcp@latest --slim --headless --isolated --no-usage-statistics "$@"
+  fi
+fi
+
+# Linux: must have found Chrome in Puppeteer cache
+if [[ -n "$CHROME_PATH" ]]; then
+  exec bunx --bun chrome-devtools-mcp@latest --slim --headless --isolated --no-usage-statistics --executable-path "$CHROME_PATH" "$@"
+fi
+
+echo "ERROR: Chrome not found. On Linux, run: bunx puppeteer browsers install chrome@stable" >&2
+echo "       On Mac, install Google Chrome from https://www.google.com/chrome/" >&2
+exit 1
