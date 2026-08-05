@@ -86,6 +86,12 @@ vim.opt.timeoutlen = 300
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
+-- Switch between splits
+vim.keymap.set("n", "<leader>h", "<C-w>h", { desc = "Go to left pane / sidebar" })
+vim.keymap.set("n", "<leader>j", "<C-w>j", { desc = "Go to lower pane" })
+vim.keymap.set("n", "<leader>k", "<C-w>k", { desc = "Go to upper pane" })
+vim.keymap.set("n", "<leader>l", "<C-w>l", { desc = "Go to right pane / main editor" })
+
 -- =============================================================================
 -- Bootstrap lazy.nvim
 -- =============================================================================
