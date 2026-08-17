@@ -1,0 +1,15 @@
+# tuicr configuration
+
+# Disable the startup update check.
+#
+# tuicr ships as a statically-linked (static-pie) glibc binary. Its startup
+# update check performs an HTTPS request, and DNS resolution goes through
+# glibc getaddrinfo(), which dlopen()s the host's NSS modules
+# (e.g. libnss_mdns4_minimal.so.2 from nss-mdns). Loading a host NSS module
+# into a statically-linked-glibc process triggers a divide-by-zero in glibc's
+# TLS setup (__nptl_tls_static_size_for_stack) and the process dies with
+# SIGFPE: "Floating point exception (core dumped)".
+#
+# Skipping the update check avoids the crashing network call on startup so the
+# local review TUI works. Run updates manually with `tuicr update`.
+no_update_check = true

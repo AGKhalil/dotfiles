@@ -359,6 +359,14 @@ install_tuicr() {
   ok "tuicr installed"
 }
 
+setup_tuicr_symlinks() {
+  info "Linking tuicr config..."
+  # no_update_check = true — avoids a SIGFPE crash on startup caused by the
+  # statically-linked glibc binary dlopen'ing host NSS modules during the
+  # update check's DNS lookup. See tuicr/config.toml for details.
+  link_it "$DOTFILES_DIR/tuicr/config.toml" "$HOME/.config/tuicr/config.toml"
+}
+
 # ── Chrome DevTools MCP ──────────────────────────────────────────────────────
 
 install_chrome_for_mcp() {
@@ -703,6 +711,7 @@ uninstall() {
   echo "    - OpenCode wrapper scripts  (~/.local/bin/opencode, opencode-work)"
   echo "    - OpenCode data dirs        (~/.local/share/opencode-*)"
   echo "    - Worktrunk config          (~/.config/worktrunk/)"
+  echo "    - tuicr config              (~/.config/tuicr/)"
   echo "    - Neovim config symlink     (~/.config/nvim)"
   echo "    - Ghostty config symlink    (~/.config/ghostty)"
   echo
@@ -769,6 +778,12 @@ uninstall() {
   if [ -L "$HOME/.config/worktrunk/config.toml" ]; then
     rm "$HOME/.config/worktrunk/config.toml"
     ok "Removed worktrunk config symlink"
+  fi
+
+  # tuicr config
+  if [ -L "$HOME/.config/tuicr/config.toml" ]; then
+    rm "$HOME/.config/tuicr/config.toml"
+    ok "Removed tuicr config symlink"
   fi
 
   # Neovim config symlink (keep the binary)
@@ -918,6 +933,7 @@ main() {
   setup_opencode_symlinks
   patch_anthropic_auth_port
   setup_worktrunk_symlinks
+  setup_tuicr_symlinks
   setup_agent_notify
 
   echo
