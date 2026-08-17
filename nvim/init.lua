@@ -100,11 +100,115 @@ vim.opt.timeoutlen = 300
 vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
--- Switch between splits
-vim.keymap.set("n", "<leader>h", "<C-w>h", { desc = "Go to left pane / sidebar" })
+-- =============================================================================
+-- Split navigation + tmux-style zoom (explorer-aware)
+-- =============================================================================
+-- The Snacks file explorer reserves its columns with a `snacks_layout_box`
+-- split and draws the file list as a float inside it. Return the box window (to
+-- preserve its width across a zoom) and the list window (to focus), or nil.
+local function explorer_wins()
+  local box
+  for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+    if vim.api.nvim_win_get_config(w).relative == ""
+      and vim.bo[vim.api.nvim_win_get_buf(w)].filetype == "snacks_layout_box" then
+      box = w
+      break
+    end
+  end
+  local list
+  local ok, Snacks = pcall(require, "snacks")
+  if ok and Snacks.picker and Snacks.picker.get then
+    for _, p in ipairs(Snacks.picker.get({ source = "explorer" })) do
+      local w = p.list and p.list.win and p.list.win.win
+      if w and vim.api.nvim_win_is_valid(w) then
+        list = w
+        break
+      end
+    end
+  end
+  if box or list then
+    return { box = box, list = list }
+  end
+  return nil
+end
+
+-- tmux-style zoom: maximize the current split while keeping the explorer at its
+-- width (other splits shrink to slivers). Toggling restores the exact layout.
+-- State is per-tabpage so tabs zoom independently.
+local function toggle_zoom()
+  if vim.t.zoom_restore then
+    pcall(vim.cmd, vim.t.zoom_restore)
+    vim.t.zoom_restore = nil
+    vim.t.zoom_win = nil
+    return
+  end
+  local cur = vim.api.nvim_get_current_win()
+  if vim.api.nvim_win_get_config(cur).relative ~= "" then
+    return -- don't try to zoom a floating window (e.g. opencode chat)
+  end
+  local ex = explorer_wins()
+  if ex and (cur == ex.box or cur == ex.list) then
+    return -- don't zoom the explorer itself
+  end
+  local box_w = ex and ex.box and vim.api.nvim_win_is_valid(ex.box)
+    and vim.api.nvim_win_get_width(ex.box) or nil
+  vim.t.zoom_restore = vim.fn.winrestcmd()
+  vim.cmd("wincmd _ | wincmd |") -- maximize height, then width
+  if box_w then
+    pcall(vim.api.nvim_win_set_width, ex.box, box_w)
+  end
+  vim.t.zoom_win = cur
+end
+
+-- If opencode's chat is zoomed via its own <leader>oz, return its window so the
+-- nav below can treat it as the zoomed pane.
+local function opencode_zoom_win()
+  local ok, state = pcall(require, "opencode.state")
+  if not ok then
+    return nil
+  end
+  local ok_z, zoomed = pcall(function() return state.pre_zoom_width end)
+  if not ok_z or not zoomed then
+    return nil
+  end
+  local ok_w, wins = pcall(function() return state.windows end)
+  local w = ok_w and wins and wins.output_win
+  if w and vim.api.nvim_win_is_valid(w) then
+    return w
+  end
+  return nil
+end
+
+-- Left/right split navigation. While a pane is zoomed -- either the <leader>Z
+-- split zoom or opencode's <leader>oz zoom -- and the explorer is open, jump
+-- only between the explorer and the zoomed window, skipping everything else.
+local function zoom_nav(dir) -- "h" (left) or "l" (right)
+  local zw = (vim.t.zoom_restore and vim.t.zoom_win) or opencode_zoom_win()
+  if not (zw and vim.api.nvim_win_is_valid(zw)) then
+    vim.cmd("wincmd " .. dir)
+    return
+  end
+  local ex = explorer_wins()
+  local ew = ex and (ex.list or ex.box)
+  if not (ew and vim.api.nvim_win_is_valid(ew)) then
+    vim.api.nvim_set_current_win(zw) -- no explorer: land on the zoomed pane
+    return
+  end
+  -- Order the two targets by screen column so h=left / l=right regardless of
+  -- which side the explorer is on.
+  local ecol = vim.api.nvim_win_get_position(ex.box or ew)[2]
+  local zcol = vim.api.nvim_win_get_position(zw)[2]
+  local left_win = (ecol <= zcol) and ew or zw
+  local right_win = (ecol <= zcol) and zw or ew
+  vim.api.nvim_set_current_win(dir == "h" and left_win or right_win)
+end
+
+-- Switch between splits (h/l are zoom-aware; see above)
+vim.keymap.set("n", "<leader>h", function() zoom_nav("h") end, { desc = "Left pane (zoomed: explorer)" })
 vim.keymap.set("n", "<leader>j", "<C-w>j", { desc = "Go to lower pane" })
 vim.keymap.set("n", "<leader>k", "<C-w>k", { desc = "Go to upper pane" })
-vim.keymap.set("n", "<leader>l", "<C-w>l", { desc = "Go to right pane / main editor" })
+vim.keymap.set("n", "<leader>l", function() zoom_nav("l") end, { desc = "Right pane (zoomed: zoomed pane)" })
+vim.keymap.set("n", "<leader>z", toggle_zoom, { desc = "Toggle zoom (keep explorer)" })
 
 -- Resize splits in big steps (Alt+h/j/k/l, tmux-style). Hold to keep resizing.
 -- tmux leaves plain Alt+hjkl free, so these pass through to Neovim.
@@ -126,7 +230,8 @@ local function pane_help()
     "    Alt+h / Alt+l       resize narrower / wider  (10 cols)",
     "    Alt+k / Alt+j       resize taller / shorter  (5 rows)",
     "    <leader>oz          fullscreen opencode chat  (toggle)",
-    "    <leader>Z           fullscreen file buffer    (toggle)",
+    "    <leader>z           zoom pane, keeps explorer (toggle)",
+    "      (zoomed) h / l     jump explorer <-> zoomed pane",
     "",
     "  opencode messages",
     "    <leader>oT          open session timeline",

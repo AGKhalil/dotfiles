@@ -77,8 +77,7 @@ return {
     { "<leader>ss", function() Snacks.picker.lsp_symbols() end, desc = "LSP Symbols" },
     { "<leader>sS", function() Snacks.picker.lsp_workspace_symbols() end, desc = "LSP Workspace Symbols" },
     -- Other
-    { "<leader>z", function() Snacks.zen() end, desc = "Toggle Zen Mode" },
-    { "<leader>Z", function() Snacks.zen.zoom() end, desc = "Toggle Zoom" },
+    -- <leader>z (tmux-style zoom that keeps the explorer) is defined in init.lua
     { "<leader>.", function() Snacks.scratch() end, desc = "Toggle Scratch Buffer" },
     { "<leader>S", function() Snacks.scratch.select() end, desc = "Select Scratch Buffer" },
     { "<leader>bd", function() Snacks.bufdelete() end, desc = "Delete Buffer" },
