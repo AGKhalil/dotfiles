@@ -92,6 +92,75 @@ vim.keymap.set("n", "<leader>j", "<C-w>j", { desc = "Go to lower pane" })
 vim.keymap.set("n", "<leader>k", "<C-w>k", { desc = "Go to upper pane" })
 vim.keymap.set("n", "<leader>l", "<C-w>l", { desc = "Go to right pane / main editor" })
 
+-- Resize splits in big steps (Alt+h/j/k/l, tmux-style). Hold to keep resizing.
+-- tmux leaves plain Alt+hjkl free, so these pass through to Neovim.
+local width_step, height_step = 10, 5
+vim.keymap.set("n", "<M-h>", function() vim.cmd("vertical resize -" .. width_step) end, { desc = "Pane narrower" })
+vim.keymap.set("n", "<M-l>", function() vim.cmd("vertical resize +" .. width_step) end, { desc = "Pane wider" })
+vim.keymap.set("n", "<M-k>", function() vim.cmd("resize +" .. height_step) end, { desc = "Pane taller" })
+vim.keymap.set("n", "<M-j>", function() vim.cmd("resize -" .. height_step) end, { desc = "Pane shorter" })
+
+-- Pane/window keymap cheatsheet popup (<leader>?)
+local function pane_help()
+  local lines = {
+    "",
+    "  Pane / Window Commands",
+    "  ──────────────────────────────────────────────────────",
+    "",
+    "  Neovim panes",
+    "    <leader> h j k l    move   left / down / up / right",
+    "    Alt+h / Alt+l       resize narrower / wider  (10 cols)",
+    "    Alt+k / Alt+j       resize taller / shorter  (5 rows)",
+    "    <leader>oz          fullscreen opencode chat  (toggle)",
+    "    <leader>Z           fullscreen file buffer    (toggle)",
+    "",
+    "  opencode messages",
+    "    <leader>oT          open session timeline",
+    "      <C-u>             undo to selected message (edit + resend)",
+    "      <C-f>             fork from selected message",
+    "",
+    "  tmux panes  (press prefix = Ctrl+Space, then:)",
+    "    H J K L             resize by 1  (Shift; tap to repeat)",
+    "    :                   open command prompt, then run:",
+    "        resize-pane -L/R/U/D N     resize by N cells",
+    "    h j k l             move between panes",
+    "    z                   zoom / maximize pane",
+    "",
+    "  q / <Esc>  close",
+    "",
+  }
+  local width = 0
+  for _, l in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(l))
+  end
+  width = width + 2
+  local height = #lines
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+  vim.bo[buf].bufhidden = "wipe"
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = width,
+    height = height,
+    row = math.max(0, math.floor((vim.o.lines - height) / 2)),
+    col = math.max(0, math.floor((vim.o.columns - width) / 2)),
+    style = "minimal",
+    border = "rounded",
+    title = " Keymaps ",
+    title_pos = "center",
+  })
+  vim.wo[win].cursorline = false
+  for _, key in ipairs({ "q", "<Esc>" }) do
+    vim.keymap.set("n", key, function()
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_close(win, true)
+      end
+    end, { buffer = buf, nowait = true, silent = true })
+  end
+end
+vim.keymap.set("n", "<leader>?", pane_help, { desc = "Pane/window keymap help" })
+
 -- =============================================================================
 -- Bootstrap lazy.nvim
 -- =============================================================================

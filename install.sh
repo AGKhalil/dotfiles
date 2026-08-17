@@ -345,6 +345,20 @@ setup_worktrunk_symlinks() {
   link_it "$DOTFILES_DIR/worktrunk/config.toml" "$HOME/.config/worktrunk/config.toml"
 }
 
+# ── tuicr ─────────────────────────────────────────────────────────────────────
+
+install_tuicr() {
+  if command -v tuicr &>/dev/null; then
+    ok "tuicr already installed: $(tuicr --version 2>&1 | head -1)"
+    return
+  fi
+
+  info "Installing tuicr..."
+  curl -fsSL https://tuicr.dev/install.sh | sh
+
+  ok "tuicr installed"
+}
+
 # ── OpenCode profile setup ───────────────────────────────────────────────────
 
 has_personal_profile() {
@@ -788,6 +802,7 @@ main() {
   install_opencode_binary
   install_openspec
   install_worktrunk
+  install_tuicr
   setup_shell
   setup_symlinks
 
