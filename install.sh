@@ -357,6 +357,104 @@ install_tuicr() {
   curl -fsSL https://tuicr.dev/install.sh | sh
 
   ok "tuicr installed"
+
+# ── Chrome DevTools MCP ──────────────────────────────────────────────────────
+
+install_chrome_for_mcp() {
+  local os
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+  if [ "$os" = "darwin" ]; then
+    ok "macOS detected — system Chrome will be used for MCP (skipping download)"
+    return
+  fi
+
+  # Linux: check Puppeteer cache for existing Chrome
+  local chrome_found=false
+  for candidate in "$HOME"/.cache/puppeteer/chrome/*/chrome-linux64/chrome; do
+    if [ -x "$candidate" ]; then
+      chrome_found=true
+      ok "Chrome already installed in Puppeteer cache: $candidate"
+      break
+    fi
+  done
+
+  if [ "$chrome_found" = true ]; then
+    return
+  fi
+
+  info "Downloading Chrome via Puppeteer (no sudo required)..."
+  local bun_cmd
+  bun_cmd="$(command -v bun 2>/dev/null || echo "$HOME/.bun/bin/bun")"
+  "$bun_cmd" x puppeteer browsers install chrome@stable
+  ok "Chrome downloaded to ~/.cache/puppeteer/"
+}
+
+setup_chrome_devtools_mcp() {
+  local wrapper_dest="$HOME/.local/bin/chrome-devtools-mcp"
+  local wrapper_src="$DOTFILES_DIR/opencode/chrome-devtools-mcp"
+
+  mkdir -p "$HOME/.local/bin"
+
+  if [ ! -f "$wrapper_src" ]; then
+    warn "chrome-devtools-mcp wrapper not found in dotfiles — skipping"
+    return
+  fi
+
+  cp "$wrapper_src" "$wrapper_dest"
+  chmod +x "$wrapper_dest"
+  ok "chrome-devtools-mcp wrapper installed to $wrapper_dest"
+}
+
+validate_chrome_libs() {
+  local os
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+
+  if [ "$os" != "linux" ]; then
+    return
+  fi
+
+  info "Checking required shared libraries for headless Chrome..."
+  local missing=()
+  local libs=(
+    libX11.so.6
+    libXcomposite.so.1
+    libXdamage.so.1
+    libXext.so.6
+    libXfixes.so.3
+    libXrandr.so.2
+    libgbm.so.1
+    libpango-1.0.so.0
+    libcairo.so.2
+    libasound.so.2
+    libatk-1.0.so.0
+    libatk-bridge-2.0.so.0
+    libcups.so.2
+    libdrm.so.2
+    libdbus-1.so.3
+    libnspr4.so
+    libnss3.so
+    libnssutil3.so
+    libsmime3.so
+    libxcb.so.1
+    libxkbcommon.so.0
+    libexpat.so.1
+  )
+
+  for lib in "${libs[@]}"; do
+    if ! ldconfig -p 2>/dev/null | grep -q "$lib"; then
+      missing+=("$lib")
+    fi
+  done
+
+  if [ ${#missing[@]} -eq 0 ]; then
+    ok "All required Chrome libraries found"
+  else
+    warn "Missing libraries for headless Chrome (it may not work):"
+    for lib in "${missing[@]}"; do
+      echo "  - $lib"
+    done
+  fi
 }
 
 # ── OpenCode profile setup ───────────────────────────────────────────────────
