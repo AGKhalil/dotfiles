@@ -1,4 +1,18 @@
 -- =============================================================================
+-- Data directory: keep Neovim out of opencode profiles
+-- =============================================================================
+-- opencode profile wrappers (e.g. ~/.local/bin/opencode-work) export
+-- XDG_DATA_HOME=~/.local/share/opencode-<profile> to isolate opencode's connect
+-- keys/data. XDG_DATA_HOME is generic, so a nvim launched inside that env would
+-- otherwise store its plugins under ~/.local/share/opencode-<profile>/nvim and
+-- look like it has "no plugins installed". Neovim never needs the profile:
+--   * opencode servers get their profile from the wrapper they're spawned with.
+--   * opencode.nvim's snapshot lookup falls back to scanning ~/.local/share/*.
+-- Clear it before lazy bootstraps so nvim always uses ~/.local/share/nvim, and
+-- so child tools (tuicr, opencode) inherit the default, non-profiled data home.
+vim.env.XDG_DATA_HOME = nil
+
+-- =============================================================================
 -- Sensible Defaults
 -- =============================================================================
 

@@ -170,9 +170,6 @@ return {
         return {}
       end
       local res = vim.system({
-        "env",
-        "-u",
-        "XDG_DATA_HOME",
         "tuicr",
         "review",
         "list",
@@ -263,9 +260,6 @@ return {
     -- current session's input buffer. Does NOT open a new session.
     local function insert_tuicr_review(slug)
       vim.system({
-        "env",
-        "-u",
-        "XDG_DATA_HOME",
         "tuicr",
         "review",
         "comments",
