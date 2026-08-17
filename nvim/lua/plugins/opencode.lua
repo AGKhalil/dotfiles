@@ -164,9 +164,27 @@ return {
     local tuicr_cache = { items = nil, at = 0 }
     local TUICR_CACHE_TTL = 60
 
-    local function tuicr_review_list()
+    -- Repo selector for tuicr commands: the active checkout's own git toplevel.
+    -- tuicr keys review sessions to the working checkout (e.g. the linked
+    -- worktree `patents.sync`), but opencode's worktree() reports the *main*
+    -- worktree (`patents`) because it folds linked worktrees into one project as
+    -- "sandboxes". Passing that main worktree makes `tuicr review comments` fail
+    -- with "session not found" even though `review list` (which uses this same
+    -- toplevel) surfaced it. Returns nil when not in a git repo.
+    local function tuicr_repo()
       local root = vim.system({ "git", "-C", session_dir(), "rev-parse", "--show-toplevel" }):wait()
-      if not root or root.code ~= 0 then
+      if root and root.code == 0 then
+        local top = vim.trim(root.stdout)
+        if top ~= "" then
+          return top
+        end
+      end
+      return nil
+    end
+
+    local function tuicr_review_list()
+      local repo = tuicr_repo()
+      if not repo then
         return {}
       end
       local res = vim.system({
@@ -174,7 +192,7 @@ return {
         "review",
         "list",
         "--repo",
-        vim.trim(root.stdout),
+        repo,
       }, { text = true }):wait()
       if not res or res.code ~= 0 then
         return {}
@@ -265,8 +283,10 @@ return {
         "comments",
         "--session",
         slug,
+        -- Same checkout toplevel the picker listed the session under; opencode's
+        -- worktree() would give the main worktree and tuicr wouldn't find it.
         "--repo",
-        worktree(),
+        tuicr_repo() or worktree(),
       }, { text = true }, function(res)
         vim.schedule(function()
           if not res or res.code ~= 0 then
