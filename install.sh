@@ -357,6 +357,7 @@ install_tuicr() {
   curl -fsSL https://tuicr.dev/install.sh | sh
 
   ok "tuicr installed"
+}
 
 # ── Chrome DevTools MCP ──────────────────────────────────────────────────────
 
