@@ -1,11 +1,65 @@
 return {
   "sudo-tee/opencode.nvim",
   config = function()
+    -- Switch to the next/previous TOP-LEVEL opencode session, skipping subagent
+    -- (child) sessions. Opencode's flat navigate_session_tree includes child
+    -- sessions; here we filter to sessions without a parentID. Wraps around.
+    local function switch_top_level_session(direction)
+      local ok, Promise = pcall(require, "opencode.promise")
+      local sessions = ok and require("opencode.session")
+      local runtime = ok and require("opencode.services.session_runtime")
+      local st = ok and require("opencode.state")
+      if not (ok and sessions and runtime and st) then
+        return
+      end
+      Promise.async(function()
+        local all = sessions.get_all_workspace_sessions():await()
+        local tops = {}
+        for _, s in ipairs(all or {}) do
+          if not s.parentID or s.parentID == "" then
+            tops[#tops + 1] = s
+          end
+        end
+        if #tops == 0 then
+          vim.notify("opencode: no sessions", vim.log.levels.INFO)
+          return
+        elseif #tops < 2 then
+          return
+        end
+        local active = st.active_session
+        -- Anchor on the active session, or its parent if the active one is a subagent.
+        local anchor = active
+          and ((active.parentID and active.parentID ~= "" and active.parentID) or active.id)
+        local idx = 1
+        for i, s in ipairs(tops) do
+          if s.id == anchor then
+            idx = i
+            break
+          end
+        end
+        local step = (direction == "forward") and -1 or 1
+        local target = idx + step
+        if target < 1 then
+          target = #tops
+        elseif target > #tops then
+          target = 1
+        end
+        runtime.switch_session(tops[target].id)
+      end)()
+    end
+
     require("opencode").setup({
       keymap = {
         editor = {
           ["<leader>od"] = false,
           ["<leader>oD"] = { "diff_open", desc = "Open diff view" },
+          -- Linear session switching (tmux-style leader+n/p), top-level sessions
+          -- only (skips subagent/child sessions), wrapping around.
+          ["<leader>on"] = { function() switch_top_level_session("forward") end, desc = "Next session" },
+          ["<leader>op"] = { function() switch_top_level_session("backward") end, desc = "Previous session" },
+          -- configure_provider moved off <leader>op (now prev session) and off
+          -- <leader>oP's default (parent-session nav, which we don't use).
+          ["<leader>oP"] = { "configure_provider", desc = "Configure provider" },
         },
       },
       ui = {
