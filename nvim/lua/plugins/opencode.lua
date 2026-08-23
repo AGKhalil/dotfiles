@@ -399,7 +399,8 @@ return {
       ft = { 'markdown', 'Avante', 'copilot-chat', 'opencode_output' },
     },
     -- Optional, for file mentions and commands completion, pick only one
-    'saghen/blink.cmp',
+    -- blink.cmp v2 requires nvim 0.12+; pin to the v1 line for stable nvim (0.11.x).
+    { 'saghen/blink.cmp', version = '1.*' },
     -- 'hrsh7th/nvim-cmp',
 
     -- Optional, for file mentions picker, pick only one
