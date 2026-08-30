@@ -398,9 +398,13 @@ return {
       },
       ft = { 'markdown', 'Avante', 'copilot-chat', 'opencode_output' },
     },
-    -- Optional, for file mentions and commands completion, pick only one
-    -- blink.cmp v2 requires nvim 0.12+; pin to the v1 line for stable nvim (0.11.x).
-    { 'saghen/blink.cmp', version = '1.*' },
+    -- Optional, for file mentions and commands completion, pick only one.
+    -- Disabled on purpose: blink v2 needs nvim 0.12+ (errors on 0.11), and with
+    -- blink v1 *loaded* this opencode version doesn't feed its @/#// sources into
+    -- blink, so the menus vanish. With blink absent, opencode's built-in
+    -- completion works. Re-enable (version = '1.*') once on nvim 0.12+ / when
+    -- opencode wires its completion engine bridge.
+    { 'saghen/blink.cmp', enabled = false },
     -- 'hrsh7th/nvim-cmp',
 
     -- Optional, for file mentions picker, pick only one
