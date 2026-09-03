@@ -101,10 +101,10 @@ vim.g.mapleader = " "
 vim.g.maplocalleader = " "
 
 -- =============================================================================
--- Split navigation + tmux-style zoom (explorer-aware)
+-- split navigation + tmux-style zoom (explorer-aware)
 -- =============================================================================
--- The Snacks file explorer reserves its columns with a `snacks_layout_box`
--- split and draws the file list as a float inside it. Return the box window (to
+-- the snacks file explorer reserves its columns with a `snacks_layout_box`
+-- split and draws the file list as a float inside it. return the box window (to
 -- preserve its width across a zoom) and the list window (to focus), or nil.
 local function explorer_wins()
   local box
@@ -116,9 +116,9 @@ local function explorer_wins()
     end
   end
   local list
-  local ok, Snacks = pcall(require, "snacks")
-  if ok and Snacks.picker and Snacks.picker.get then
-    for _, p in ipairs(Snacks.picker.get({ source = "explorer" })) do
+  local ok, snacks = pcall(require, "snacks")
+  if ok and snacks.picker and snacks.picker.get then
+    for _, p in ipairs(snacks.picker.get({ source = "explorer" })) do
       local w = p.list and p.list.win and p.list.win.win
       if w and vim.api.nvim_win_is_valid(w) then
         list = w

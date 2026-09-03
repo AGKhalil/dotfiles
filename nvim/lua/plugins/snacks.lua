@@ -6,16 +6,30 @@ return {
   opts = {
     bigfile = { enabled = true },
     dashboard = { enabled = true },
-    explorer = { enabled = true },
+    explorer = { enabled = true }, -- Keep enabled here
     indent = { enabled = true },
     input = { enabled = true },
     notifier = { enabled = true, timeout = 3000 },
-    picker = { enabled = true },
     quickfile = { enabled = true },
     scope = { enabled = true },
     scroll = { enabled = true },
     statuscolumn = { enabled = true },
     words = { enabled = true },
+    
+    -- ALL source layout settings must live inside the picker block
+    picker = { 
+      enabled = true,
+      sources = {
+        explorer = {
+          hidden = true,   -- Displays dotfiles (.env, .gitignore, etc.)
+          ignored = true,  -- Displays files tracked under .gitignore
+        },
+        files = {
+          hidden = true,   -- Applies hidden file visibility to standard file searches (<leader>ff)
+          ignored = true,  -- Applies gitignore visibility to standard file searches (<leader>ff)
+        },
+      },
+    },
   },
   keys = {
     -- Top Pickers & Explorer
