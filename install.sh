@@ -1,52 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Add a component by defining <name>_is_installed, <name>_install and
-# <name>_uninstall, then listing it in `components`.
-components=(opencode claude)
+# Add a component by dropping install.d/<name>.sh in place, defining
+# <name>_is_installed, <name>_install and <name>_uninstall. The name must be a
+# valid shell function prefix (no dashes); components run in filename order.
 
-opencode_is_installed() {
-  export PATH="$HOME/.opencode/bin:$PATH"
-  local version
-  version=$(opencode --version 2>/dev/null || true)
-  [[ $version =~ (^|[[:space:]])v?2\. ]] || return 1
-  printf '%s' "${version##*v}"
-}
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-opencode_install() {
-  export PATH="$HOME/.opencode/bin:$PATH"
-  curl -fsSL https://opencode.ai/v2/install | bash
-}
-
-opencode_uninstall() {
-  export PATH="$HOME/.opencode/bin:$PATH"
-  opencode uninstall
-  rm -f -- "$HOME/.opencode/bin/opencode"
-}
-
-claude_is_installed() {
-  export PATH="$HOME/.local/bin:$PATH"
-  local version label
-  command -v claude >/dev/null 2>&1 || return 1
-  version=$(claude --version 2>/dev/null || true)
-  label=${version:-unknown}
-  printf '%s' "${label%% *}"
-}
-
-claude_install() {
-  curl -fsSL https://claude.ai/install.sh | bash
-}
-
-# Leaves ~/.claude settings and session history in place.
-claude_uninstall() {
-  rm -f -- "$HOME/.local/bin/claude"
-  rm -- "$HOME/.claude.json"
-}
+sudo=()
+[[ $EUID -eq 0 ]] || sudo=(sudo)
 
 die() {
   printf '%s\n' "$*" >&2
   exit 1
 }
+
+components=()
+for module in "$root"/install.d/*.sh; do
+  [[ -f $module ]] || die "No components found in $root/install.d"
+  # shellcheck source=/dev/null
+  source "$module"
+  components+=("$(basename -- "$module" .sh)")
+done
 
 install_component() {
   local name=$1 version
