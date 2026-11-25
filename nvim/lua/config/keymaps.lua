@@ -13,3 +13,35 @@ for key, dir in pairs({ h = "left", j = "bottom", k = "top", l = "right" }) do
     require("tmux")["resize_" .. dir]()
   end, { desc = "Resize window/pane " .. key })
 end
+
+-- <leader>oy copies an opencode file reference (@path:start-end plus a trailing
+-- space) for the current line or visual selection, ready to paste in a prompt.
+local function yank_reference()
+  local mode = vim.fn.mode()
+  local first, last
+  if mode == "v" or mode == "V" or mode == "\22" then
+    -- Still in visual mode, so '< and '> are stale; use the live cursor ends.
+    first = vim.fn.line("v")
+    last = vim.fn.line(".")
+    vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+  else
+    first = vim.fn.line(".")
+    last = first
+  end
+  if first > last then
+    first, last = last, first
+  end
+
+  local path = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":.")
+  if path == "" then
+    vim.notify("Buffer has no file name", vim.log.levels.WARN)
+    return
+  end
+
+  local ref = ("@%s:%d-%d "):format(path, first, last)
+  vim.fn.setreg("+", ref)
+  vim.fn.setreg('"', ref)
+  vim.notify("Copied " .. vim.trim(ref))
+end
+
+vim.keymap.set({ "n", "x" }, "<leader>oy", yank_reference, { desc = "Yank opencode reference" })

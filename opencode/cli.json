@@ -8,7 +8,7 @@
         "indicator": true,
         "vim_enter_submit": false,
         "vim_insert_after_submit": false,
-        "vim_system_clipboard_register": false
+        "vim_system_clipboard_register": true 
       }
     }
   ]

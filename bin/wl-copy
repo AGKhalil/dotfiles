@@ -1,0 +1,5 @@
+#!/bin/sh
+# Counterpart to wl-paste. -w also forwards to the local clipboard over OSC 52.
+# Needed even when only pasting: callers that find no wl-copy tend to give up on
+# the clipboard entirely, taking wl-paste down with it.
+exec tmux load-buffer -w -

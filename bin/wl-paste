@@ -1,0 +1,5 @@
+#!/bin/sh
+# Stand-in for the real wl-paste: no display here, but tmux mirrors every
+# OSC 52 yank into a buffer, so that buffer is the clipboard. Flags are ignored;
+# a missing buffer exits nonzero so callers fall back to their own register.
+exec tmux save-buffer -
