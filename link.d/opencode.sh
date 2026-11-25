@@ -3,4 +3,5 @@
 opencode_link() {
   link opencode/opencode.jsonc "$HOME/.config/opencode/opencode.jsonc"
   link opencode/cli.json "$HOME/.config/opencode/cli.json"
+  link opencode/AGENTS.md "$HOME/.config/opencode/AGENTS.md"
 }
