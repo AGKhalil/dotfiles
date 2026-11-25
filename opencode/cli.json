@@ -1,0 +1,15 @@
+{
+  "plugins": [
+    {
+      "package": "@leohenon/opencode-vim-plugin",
+      "options": {
+        "enabled": true,
+        "toggle_key": "ctrl+shift+v",
+        "indicator": true,
+        "vim_enter_submit": false,
+        "vim_insert_after_submit": false,
+        "vim_system_clipboard_register": false
+      }
+    }
+  ]
+}
