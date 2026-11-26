@@ -1,4 +1,7 @@
 {
+  "keybinds": {
+    "agent.cycle": "tab"
+  },
   "plugins": [
     {
       "package": "@leohenon/opencode-vim-plugin",
