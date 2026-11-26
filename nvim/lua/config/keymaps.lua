@@ -45,3 +45,7 @@ local function yank_reference()
 end
 
 vim.keymap.set({ "n", "x" }, "<leader>oy", yank_reference, { desc = "Yank opencode reference" })
+
+-- <leader>r reloads buffers whose files changed on disk (e.g. after a git
+-- checkout or an opencode edit). LazyVim only checks on FocusGained/TermClose.
+vim.keymap.set("n", "<leader>r", "<cmd>checktime<cr>", { desc = "Reload buffer" })
